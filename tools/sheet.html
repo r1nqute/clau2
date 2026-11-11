@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><title>그림 확인</title>
+<style>
+@font-face { font-family: 'Galmuri11'; src: url('../assets/fonts/Galmuri11.woff2') format('woff2'); }
+@font-face { font-family: 'Galmuri9'; src: url('../assets/fonts/Galmuri9.woff2') format('woff2'); }
+body { margin: 0; background: #5f7d42; } canvas { image-rendering: pixelated; }
+</style></head><body><canvas id="c"></canvas>
+<script src="../js/core.js"></script><script src="../js/art.js"></script><script src="../js/art2.js"></script>
+<script>
+// 만든 그림을 전부 늘어놓고 본다. ?only=이름,이름 으로 골라 볼 수 있다.
+Promise.all([document.fonts.load('12px Galmuri11', '칼'), document.fonts.load('10px Galmuri9', '칼')]).then(() => {
+  G.art.build();
+  const only = new URLSearchParams(location.search).get('only'), Z = +(new URLSearchParams(location.search).get('z') || 3);
+  const list = [];
+  (function walk(o, name) {
+    if (!o) return;
+    if (o.getContext) { list.push([name, o]); return; }
+    if (Array.isArray(o)) { o.forEach((v, i) => walk(v, name + i)); return; }
+    if (typeof o === 'object') for (const k in o) walk(o[k], name ? name + '.' + k : k);
+  })(G.spr, '');
+  const sel = only ? list.filter(e => only.split(',').some(p => e[0].indexOf(p) === 0)) : list;
+  const c = document.getElementById('c'), W = 1500;
+  let x = 4, y = 4, rowH = 0; const pos = [];
+  for (const [n, s] of sel) {
+    const w = Math.max(s.width * Z, n.length * 6) + 8;
+    if (x + w > W) { x = 4; y += rowH + 16; rowH = 0; }
+    pos.push([n, s, x, y]); x += w; rowH = Math.max(rowH, s.height * Z);
+  }
+  c.width = W; c.height = y + rowH + 20;
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#718c45'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.font = '10px monospace'; ctx.fillStyle = '#000';
+  for (const [n, s, X, Y] of pos) { ctx.drawImage(s, X, Y, s.width * Z, s.height * Z); ctx.fillText(n, X, Y + s.height * Z + 10); }
+  document.title = 'ready';
+});
+</script></body></html>

@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><title>지도 확인</title>
+<style>
+@font-face { font-family: 'Galmuri11'; src: url('../assets/fonts/Galmuri11.woff2') format('woff2'); }
+@font-face { font-family: 'Galmuri9'; src: url('../assets/fonts/Galmuri9.woff2') format('woff2'); }
+body { margin: 0; background: #111; } canvas { image-rendering: pixelated; display: block; }
+</style></head><body><canvas id="c"></canvas>
+<script src="../js/core.js"></script><script src="../js/art.js"></script><script src="../js/art2.js"></script>
+<script src="../js/world.js"></script><script src="../js/maps.js"></script><script src="../js/maps2.js"></script><script src="../js/maps3.js"></script>
+<script>
+// 지도 한 장을 통째로 그려 본다. ?m=dan&x0=0&y0=0&w=112&h=72&grid=1
+Promise.all([document.fonts.load('12px Galmuri11', '칼'), document.fonts.load('10px Galmuri9', '칼')]).then(() => {
+  const q = new URLSearchParams(location.search);
+  G.art.build(); G.world.init();
+  const m = G.world.use(q.get('m') || 'dan');
+  const x0 = +(q.get('x0') || 0), y0 = +(q.get('y0') || 0), w = +(q.get('w') || m.w - x0), h = +(q.get('h') || m.h - y0), z = +(q.get('z') || 1);
+  const c = document.getElementById('c'); c.width = w * 16 * z; c.height = h * 16 * z;
+  const big = G.art.cv(w * 16, h * 16), ctx = big.getContext('2d');
+  const camx = x0 * 16, camy = y0 * 16;
+  for (let cy = Math.floor(camy / 256); cy <= Math.floor((camy + h * 16 - 1) / 256); cy++)
+    for (let cx = Math.floor(camx / 256); cx <= Math.floor((camx + w * 16 - 1) / 256); cx++)
+      ctx.drawImage(G.world.chunk(cx, cy), cx * 256 - camx, cy * 256 - camy);
+  const spr = pr => { let sp = G.spr[pr.s]; if (!sp) { console.error('no sprite', pr.s); return null; } if (Array.isArray(sp)) sp = sp[(pr.v || 0) % sp.length]; return sp; };
+  const draw = pr => { const sp = spr(pr); if (sp) ctx.drawImage(sp, Math.round(pr.x - camx - (sp.ax !== undefined ? sp.ax : sp.width / 2)), Math.round(pr.y - camy - sp.height + 1)); };
+  const list = m.props.slice().sort((a, b) => a.y - b.y);
+  for (const pr of list) if (pr.flat) draw(pr);
+  const ents = list.filter(p => !p.flat).map(p => ({ y: p.y, p }));
+  for (const n of m.npcs) ents.push({ y: n.ty * 16 + 13, n });
+  ents.sort((a, b) => a.y - b.y);
+  for (const e of ents) {
+    if (e.p) draw(e.p);
+    else { const sp = G.spr.npc[e.n.id] || (G.spr.f[e.n.id] && G.spr.f[e.n.id].r[0]); if (sp) ctx.drawImage(sp, e.n.tx * 16 + 8 - (sp.width >> 1) - camx, e.n.ty * 16 + 14 - sp.height - camy); else console.error('no npc sprite', e.n.id); }
+  }
+  for (const s of m.spawns) { ctx.fillStyle = s.night ? '#b9d2cc' : '#cf6a3d'; ctx.fillRect(s.x - camx - 2, s.y - camy - 2, 4, 4); G.text.draw(ctx, s.type, s.x - camx + 3, s.y - camy - 8, '#f6f1e3', 'small'); }
+  for (const wp of m.warps) { ctx.fillStyle = 'rgba(230,204,120,0.6)'; ctx.fillRect(wp.tx * 16 - camx, wp.ty * 16 - camy, 16, 16); }
+  if (q.get('solid')) { ctx.fillStyle = 'rgba(255,0,0,0.3)'; for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (G.world.solidTile(x, y)) ctx.fillRect((x - x0) * 16, (y - y0) * 16, 16, 16); }
+  if (q.get('grid')) {
+    for (let x = Math.ceil(x0 / 10) * 10; x < x0 + w; x += 10) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect((x - x0) * 16, 0, 1, h * 16); G.text.draw(ctx, '' + x, (x - x0) * 16 + 2, 1, '#fff', 'small'); }
+    for (let y = Math.ceil(y0 / 10) * 10; y < y0 + h; y += 10) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, (y - y0) * 16, w * 16, 1); G.text.draw(ctx, '' + y, 1, (y - y0) * 16 + 1, '#fff', 'small'); }
+  }
+  const o = c.getContext('2d'); o.imageSmoothingEnabled = z >= 1 ? false : true; o.drawImage(big, 0, 0, c.width, c.height);
+  document.title = 'ready';
+});
+</script></body></html>
