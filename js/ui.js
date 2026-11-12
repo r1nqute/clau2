@@ -113,7 +113,7 @@
     if (I.back() || I.hit('map')) { menu.open = false; G.sfx('move'); return; }
     if (I.hit('left')) { menu.tab = (menu.tab + TABS.length - 1) % TABS.length; menu.sel = 0; G.sfx('move'); }
     if (I.hit('right')) { menu.tab = (menu.tab + 1) % TABS.length; menu.sel = 0; G.sfx('move'); }
-    const list = menu.tab === 0 ? invList() : menu.tab === 1 ? G.SKILL_ORDER : menu.tab === 2 ? seenList() : [];
+    const list = menu.tab === 0 ? invList() : menu.tab === 1 ? G.ART_ORDER : menu.tab === 2 ? seenList() : [];
     if (I.hit('up') && list.length) { menu.sel = (menu.sel + list.length - 1) % list.length; G.sfx('move'); }
     if (I.hit('down') && list.length) { menu.sel = (menu.sel + 1) % list.length; G.sfx('move'); }
     menu.sel = G.clamp(menu.sel, 0, Math.max(0, list.length - 1));
@@ -121,9 +121,6 @@
       const id = list[menu.sel], d = G.ITEMS[id];
       if (I.hit('a')) { if (d.heal || d.ki) G.game.eat(id); else G.sfx('deny'); }
       else if (I.hit('b')) { if (d.heal || d.ki) { s.quick = id; G.sfx('ok'); } else G.sfx('deny'); }
-    } else if (menu.tab === 1 && (I.hit('a') || I.hit('b'))) {
-      const id = list[menu.sel];
-      if (s.skills[id]) { s.skill = id; G.sfx('ok'); } else G.sfx('deny');
     }
   }
   function buildMini(m) {
@@ -170,9 +167,11 @@
       TX.draw(ctx, G.WEAPONS[s.wlv || 0].name, 182, 52, PAPER);
       const wl = TX.wrap(G.WEAPONS[s.wlv || 0].desc, 166, 'small');
       for (let i = 0; i < Math.min(2, wl.length); i++) TX.draw(ctx, wl[i], 182, 67 + i * 11, DIM, 'small');
-      TX.draw(ctx, '감 ' + s.hp + '/' + s.maxhp + '   기 ' + Math.floor(s.ki) + '/' + s.maxki, 182, 96, PAPER);
-      TX.draw(ctx, '벤 것 ' + (s.kills || 0) + '   보낸 것 ' + (s.spared || 0), 182, 114, DIM, 'small');
-      TX.draw(ctx, '쳐낸 칼 ' + (s.parries || 0) + '   쓰러진 횟수 ' + (s.deaths || 0), 182, 126, DIM, 'small');
+      const H = G.hero;
+      TX.draw(ctx, '경지 ' + s.lv + '   체력 ' + s.hp + '/' + s.maxhp, 182, 92, PAPER);
+      TX.draw(ctx, '힘 ' + H.atk(s) + '  굳셈 ' + H.def(s) + '  날램 ' + H.spd(s) + '  기 ' + Math.floor(s.ki) + '/' + s.maxki, 182, 106, DIM, 'small');
+      TX.draw(ctx, '다음 경지까지 수련 ' + (H.need(s.lv) - (s.exp || 0)), 182, 117, DIM, 'small');
+      TX.draw(ctx, '벤 것 ' + (s.kills || 0) + '   보낸 것 ' + (s.spared || 0) + '   쳐낸 칼 ' + (s.parries || 0), 182, 128, DIM, 'small');
       TX.draw(ctx, G.game.dayText(), 182, 150, DIM, 'small');
       rule(ctx, 28, 168, 328);
       if (list.length) {
@@ -182,33 +181,33 @@
         TX.draw(ctx, d.heal || d.ki ? (G.touch ? '베기: 먹는다   막기: 손에 쥔다(먹기 단추로 먹는다)' : 'Z 먹는다   X 손에 쥔다(V로 먹는다)') : '', 32, 192, DIM, 'small');
       }
     } else if (menu.tab === 1) {
-      // 비기
-      for (let i = 0; i < G.SKILL_ORDER.length; i++) {
-        const id = G.SKILL_ORDER[i], k = G.SKILLS[id], has = s.skills[id], y = 40 + i * 14;
+      // 비기와 싸우는 법
+      const arts = G.ART_ORDER;
+      for (let i = 0; i < arts.length; i++) {
+        const id = arts[i], k = G.ARTS[id], has = id === 'iai' || s.skills[id], y = 40 + i * 13;
         if (i === menu.sel) cursor(ctx, 31, y);
         TX.draw(ctx, has ? k.name : '？？？', 40, y, !has ? DIM : i === menu.sel ? LIGHT : PAPER);
-        if (has && id === s.skill) TX.draw(ctx, G.touch ? '씀' : 'C', 110, y + 2, RED, 'small');
+        if (has) TX.draw(ctx, '기 ' + k.cost, 120, y + 2, GOLD, 'small', 2);
       }
-      const id = G.SKILL_ORDER[menu.sel], k = G.SKILLS[id];
-      ctx.fillStyle = LINE; ctx.fillRect(126, 40, 1, 72);
-      if (s.skills[id]) {
-        TX.draw(ctx, k.kanji, 136, 40, GOLD);
-        TX.draw(ctx, k.from + '에게서 · 기 ' + k.cost + '칸', 348, 42, DIM, 'small', 2);
-        const lines = TX.wrap(k.desc, 210, 'small');
-        for (let i = 0; i < Math.min(4, lines.length); i++) TX.draw(ctx, lines[i], 136, 58 + i * 11, PAPER, 'small');
-        TX.draw(ctx, id === s.skill ? '지금 쓰는 비기' : (G.touch ? '베기: 이 비기를 쓴다' : 'Z 이 비기를 쓴다'), 136, 102, id === s.skill ? GOLD : DIM, 'small');
-      } else TX.draw(ctx, '아직 보지 못한 수.', 136, 42, DIM);
-      rule(ctx, 28, 116, 328);
-      const rows = G.touch ? [['베기', '이어 누르면 세 수'], ['발도', '베기를 꾹 눌렀다 뗀다'], ['막기', '누르고 있는다'], ['쳐내기', '맞는 순간 막기'],
-        ['되받아치기', '쳐낸 직후 베기'], ['보법', '뒤이어 베기로 달려 베기'], ['비기', '바꾸기는 바꿈 단추'], ['먹기', '쥔 것을 먹는다']]
-        : [['베기', 'Z · 이어 누르면 세 수'], ['발도', 'Z 꾹 눌렀다 뗀다'], ['막기', 'X 누르고 있는다'], ['쳐내기', '맞는 순간 X'],
-          ['되받아치기', '쳐낸 직후 Z'], ['보법', 'Space · 뒤이어 Z로 달려 베기'], ['비기', 'C · 바꾸기 Q'], ['먹기', 'V']];
+      const id = arts[menu.sel], k = G.ARTS[id], sk = G.SKILLS[id];
+      ctx.fillStyle = LINE; ctx.fillRect(128, 40, 1, 76);
+      if (id === 'iai' || s.skills[id]) {
+        TX.draw(ctx, sk ? sk.kanji : '居合', 138, 40, GOLD);
+        TX.draw(ctx, sk ? sk.from + '에게서' : '고려에서 익힌 것', 352, 42, DIM, 'small', 2);
+        const lines = TX.wrap(k.desc, 212, 'small');
+        for (let i = 0; i < Math.min(4, lines.length); i++) TX.draw(ctx, lines[i], 138, 58 + i * 11, PAPER, 'small');
+        if (id === 'leap') TX.draw(ctx, '들에서도 쓴다: ' + G.key('c') + '로 물과 낮은 것을 건너뛴다.', 138, 104, DIM, 'small');
+      } else TX.draw(ctx, '아직 보지 못한 수.', 138, 42, DIM);
+      rule(ctx, 28, 120, 328);
+      const rows = [['베기', '한 칼. 기가 조금 찬다'], ['쳐내기', '흰 수 하나를 쳐내고 되친다'], ['비키기', '붉은 수를 비킨다. 기가 찬다'], ['막기', '무엇이든 덜 아프게']];
       for (let i = 0; i < rows.length; i++) {
-        const cx = i < 4 ? 32 : 196, y = 121 + (i % 4) * 12;
-        TX.draw(ctx, rows[i][0], cx, y, GOLD, 'small'); TX.draw(ctx, rows[i][1], cx + 52, y, PAPER, 'small');
+        const cx = i < 2 ? 32 : 196, y = 125 + (i % 2) * 12;
+        TX.draw(ctx, rows[i][0], cx, y, GOLD, 'small'); TX.draw(ctx, rows[i][1], cx + 40, y, PAPER, 'small');
       }
-      TX.draw(ctx, '흰 번쩍임은 막거나 쳐낸다. 붉은 번쩍임과 붉은 자리는 비킨다.', 32, 174, DIM, 'small');
-      TX.draw(ctx, '자세(노란 줄)를 무너뜨리면 틈이 난다. 칼을 버린 자는 보내 줘도 된다.', 32, 186, DIM, 'small');
+      TX.draw(ctx, '저쪽의 기색이 먼저 보인다. 흰 번쩍임은 쳐내고, 붉은 번쩍임은 비킨다.', 32, 154, DIM, 'small');
+      TX.draw(ctx, '받아칠 자세(금빛 네모)에는 베지 말고 기다린다. 막는 자세(흰 네모)는 비기로 뚫는다.', 32, 166, DIM, 'small');
+      TX.draw(ctx, '자세(노란 줄)가 무너진 맞수는 크게 벨 수 있다. 칼을 버린 자는 보내 줘도 된다.', 32, 178, DIM, 'small');
+      TX.draw(ctx, '들에서: ' + (G.touch ? '치기 단추' : 'Z') + '로 등 뒤를 먼저 치면 한 차례 먼저 움직인다. ' + (G.touch ? '달리기' : 'Space') + '를 누르면 달린다.', 32, 190, DIM, 'small');
     } else if (menu.tab === 2) {
       const list = seenList();
       if (!list.length) { TX.draw(ctx, '아직 적힌 이름이 없다.', 34, 42, DIM); return; }
@@ -424,15 +423,12 @@
 
     hud(ctx, time) {
       const s = G.s;
-      for (let i = 0; i < s.maxhp; i++) ctx.drawImage(i < s.hp ? G.spr.hpFull : G.spr.hpEmpty, 5 + i * 10, 5);
-      // 기: 푸른 마름모
-      for (let i = 0; i < s.maxki; i++) {
-        const x = 6 + i * 9, y = 17, f = G.clamp(s.ki - i, 0, 1);
-        ctx.fillStyle = INK; ctx.fillRect(x + 2, y, 3, 7); ctx.fillRect(x + 1, y + 1, 5, 5); ctx.fillRect(x, y + 2, 7, 3);
-        ctx.fillStyle = f >= 1 ? '#b9d2cc' : '#33303a'; ctx.fillRect(x + 3, y + 1, 1, 5); ctx.fillRect(x + 2, y + 2, 3, 3); ctx.fillRect(x + 1, y + 3, 5, 1);
-        if (f > 0 && f < 1) { ctx.fillStyle = '#7fa9b0'; ctx.fillRect(x + 3, y + 3, 1, 3); if (f > 0.5) ctx.fillRect(x + 2, y + 3, 3, 1); }
-        if (f >= 1) { ctx.fillStyle = '#f6f1e3'; ctx.fillRect(x + 3, y + 2, 1, 1); }
-      }
+      ctx.drawImage(G.spr.hpFull, 4, 4);
+      ctx.fillStyle = INK; ctx.fillRect(15, 6, 64, 6); ctx.fillStyle = '#33303a'; ctx.fillRect(16, 7, 62, 4);
+      ctx.fillStyle = s.hp <= s.maxhp * 0.3 ? RED : '#b8d48a'; ctx.fillRect(16, 7, Math.max(0, Math.round(62 * s.hp / s.maxhp)), 4);
+      TX.drawS(ctx, s.hp + '/' + s.maxhp, 84, 3, LIGHT, 'small');
+      TX.drawS(ctx, '경지 ' + s.lv, 6 + s.maxki * 9 + 4, 16, PAPER, 'small');
+      this.kiPips(ctx, 6, 17);
       ctx.drawImage(G.spr.coin, 378 - TX.width('' + s.money, 'small') - 10, 5);
       TX.drawS(ctx, '' + s.money, 378, 4, LIGHT, 'small', 2);
       // 해와 달
@@ -450,10 +446,10 @@
         TX.draw(ctx, G.touch ? '먹' : 'V', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, t, G.W - 8, ry + 1, LIGHT, 'small', 2);
         ry -= 15;
       }
-      if (s.skill && s.skills[s.skill]) {
-        const k = G.SKILLS[s.skill], w = TX.width(k.name, 'small') + 20, ok = s.ki >= k.cost;
+      if (s.skills.leap) {
+        const nm = '팔척뛰기', w = TX.width(nm, 'small') + 20;
         ctx.fillStyle = 'rgba(27,26,31,0.75)'; ctx.fillRect(G.W - w - 4, ry, w, 13);
-        TX.draw(ctx, G.touch ? '비' : 'C', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, k.name, G.W - 8, ry + 1, ok ? LIGHT : DIM, 'small', 2);
+        TX.draw(ctx, G.touch ? '뛰' : 'C', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, nm, G.W - 8, ry + 1, LIGHT, 'small', 2);
       }
       let y = G.H - 18;
       for (let i = toasts.length - 1; i >= 0; i--) {
@@ -468,6 +464,16 @@
         ctx.fillStyle = 'rgba(27,26,31,0.7)'; ctx.fillRect((G.W - w) / 2, 34, w, 19);
         ctx.fillStyle = GOLD; ctx.fillRect((G.W - w) / 2 + 4, 36, w - 8, 1); ctx.fillRect((G.W - w) / 2 + 4, 50, w - 8, 1);
         TX.draw(ctx, banner.t, G.W / 2, 37, LIGHT, 'big', 1);
+      }
+    },
+    kiPips(ctx, ox, oy) {
+      const s = G.s;
+      for (let i = 0; i < s.maxki; i++) {
+        const x = ox + i * 9, y = oy, f = G.clamp(s.ki - i, 0, 1);
+        ctx.fillStyle = INK; ctx.fillRect(x + 2, y, 3, 7); ctx.fillRect(x + 1, y + 1, 5, 5); ctx.fillRect(x, y + 2, 7, 3);
+        ctx.fillStyle = f >= 1 ? '#b9d2cc' : '#33303a'; ctx.fillRect(x + 3, y + 1, 1, 5); ctx.fillRect(x + 2, y + 2, 3, 3); ctx.fillRect(x + 1, y + 3, 5, 1);
+        if (f > 0 && f < 1) { ctx.fillStyle = '#7fa9b0'; ctx.fillRect(x + 3, y + 3, 1, 3); if (f > 0.5) ctx.fillRect(x + 2, y + 3, 3, 1); }
+        if (f >= 1) { ctx.fillStyle = '#f6f1e3'; ctx.fillRect(x + 3, y + 2, 1, 1); }
       }
     },
     bossBar(ctx, e) {

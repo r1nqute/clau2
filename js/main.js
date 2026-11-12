@@ -4,14 +4,14 @@
   const G = window.G, fx = G.fx;
   let canvas, ctx, nightCv, nctx;
   let state = 'title', time = 0, shakeAmt = 0, camx = 0, camy = 0;
-  let titleSel = 0, hasSave = false, lastRegion = '', emitT = 0, target = null, denyT = 0;
+  let titleSel = 0, hasSave = false, lastRegion = '', emitT = 0, target = null, denyT = 0, noHud = false, transT = 0, pending = null, battleBg = null;
   const fade = { a: 0, dir: 0, cb: null };
   const DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
   function fresh() {
     const st = G.world.get('dan').start;
     return {
-      hp: 5, maxhp: 5, ki: 0, maxki: 3, money: 15, inv: { gotgam: 3, rice: 1 }, quick: 'gotgam', wlv: 0, skills: {}, skill: null,
+      hp: 40, maxhp: 40, lv: 1, exp: 0, ki: 0, maxki: 3, money: 15, inv: { gotgam: 3, rice: 2 }, quick: 'gotgam', wlv: 0, skills: {}, skill: null,
       flags: {}, seen: {}, time: 6.5 * 60, day: 1, map: 'dan', x: st.x, y: st.y,
       respawn: { map: 'dan', x: st.x, y: st.y }, kills: 0, spared: 0, deaths: 0, parries: 0
     };
@@ -60,16 +60,15 @@
       if (s.hp <= 0) this.die();
       return true;
     },
-    die() {
+    die(inDuel) {
       const s = G.s;
       s.hp = 0; s.deaths = (s.deaths || 0) + 1; G.sfx('die');
       state = 'dead'; G.p.st = 'dead';
-      const inDuel = !!G.duel.state;
       G.duel.clear(); G.music.play(null);
       setTimeout(() => {
         fade.dir = 1; fade.cb = () => {
           const lost = inDuel ? 0 : Math.floor(s.money * 0.1);
-          s.money -= lost; s.hp = s.maxhp; s.ki = Math.max(s.ki, 1);
+          s.money -= lost; s.hp = s.maxhp; s.ki = Math.max(s.ki, 1); G.p.st = 'idle';
           enter(s.respawn.map, s.respawn.x, s.respawn.y, 'down');
           state = 'play';
           G.ui.say('', inDuel ? ['정신을 차려 보니 지장 앞이다.', '졌다. 목은 붙어 있다. 저쪽도 한 치 앞에서 멈춘 모양이다.']
@@ -88,8 +87,9 @@
         return;
       }
       if (s.hp >= s.maxhp) { G.sfx('deny'); G.ui.toast('배가 부르다.'); return; }
-      s.inv[id]--; s.hp = Math.min(s.maxhp, s.hp + d.heal);
-      G.p.eat = 0.3; G.sfx('eat');
+      const v = Math.min(s.maxhp - s.hp, d.heal);
+      s.inv[id]--; s.hp += v;
+      G.p.eat = 0.3; G.sfx('eat'); fx.text(G.p.x, G.p.y - 24, '+' + v, '#b8d48a');
       fx.puff(G.p.x, G.p.y - 14, '#e6cc78', 5, 30);
     },
     useQuick() {
@@ -101,11 +101,30 @@
       }
       this.eat(s.quick);
     },
-    cycleSkill() {
-      const s = G.s, ids = G.SKILL_ORDER.filter(id => s.skills[id]);
-      if (!ids.length) return;
-      s.skill = ids[(ids.indexOf(s.skill) + 1) % ids.length];
-      G.sfx('move'); G.ui.toast('비기: ' + G.SKILLS[s.skill].name);
+    // 들것과 맞닥뜨렸다. first면 내가 먼저 쳤다.
+    engage(e, first) {
+      if (state !== 'play' || fade.dir || G.ui.busy() || G.battle.active || e.dead) return;
+      if (e.def.ai === 'post') { G.ui.say('', '짚단이다. 한 수 겨뤄 볼까.'); G.ui.choice(['겨뤄 본다', '그만둔다'], i => { if (i === 0) G.ui.run(() => this.fight(e, ['makiwara'], true)); }); return; }
+      const opts = G.GROUPS[e.kind] || [[e.kind]];
+      this.fight(e, G.pick(opts).slice(), first);
+    },
+    fight(e, group, first) {
+      const p = G.p;
+      G.main.toBattle({
+        group, first,
+        onEnd: (res, foes) => {
+          if (res === 'lose') { this.die(false); return; }
+          G.music.play(G.world.cur.music);
+          if (res === 'fled') { e.calm = 3; p.safeT = 1.5; return; }
+          for (const f of foes) {
+            const o = { kind: f.kind, x: e.x, y: e.y, bowed: f.bowed };
+            if (f.spared) this.onSpare(o); else if (f.killed) this.onKill(o);
+          }
+          if (e.def.ai === 'post') { e.dead = true; if (e.sp) { e.sp.ent = null; e.sp.deadUntil = 0; } }
+          else G.E.gone(e, true);
+          p.safeT = 1.0;
+        }
+      });
     },
 
     findTarget() {
@@ -115,7 +134,7 @@
       for (const e of G.E.list) {
         if (e.dead) continue;
         const boss = e.boss && (e.st === 'wait' || e.st === 'friend' || e.st === 'stand');
-        const kap = e.kind === 'kappa' && !e.yielded && e.st !== 'bowback';
+        const kap = false;
         if (e.type !== 'npc' && !boss && !kap) continue;
         const big = boss && e.def.big;
         const d = G.dist(e.x, e.y - 4, fx0, fy0) - (big ? 8 : 0);
@@ -143,7 +162,6 @@
       if (t.ent) {
         const e = t.ent;
         if (e.boss) { G.STORY.talkBoss(e); return; }
-        if (e.kind === 'kappa') { p.bow(); e.st = 'bowback'; e.t = 0.8; e.stun = 0; G.ui.toast('절을 했다. 갓파가 맞절을 한다.'); return; }
         const n = G.NPCS[e.id];
         if (n) n.talk(s, e);
         return;
@@ -251,6 +269,18 @@
       return;
     }
     if (state === 'dead') { fx.update(DT); return; }
+    // 싸움으로 넘어가는 사이
+    if (state === 'battleIn') {
+      transT += DT;
+      if (transT >= 0.7) { state = 'battle'; G.battle.start(pending); }
+      return;
+    }
+    if (state === 'battle') {
+      G.ui.update(DT);
+      G.battle.update(DT);
+      if (!G.battle.active && state === 'battle') { state = 'play'; fade.a = 1; fade.dir = -1; }
+      return;
+    }
 
     // 창을 닫은 그 키가 같은 틱에 다시 먹히지 않게, 닫힌 틱은 건너뛴다
     const wasBusy = G.ui.busy();
@@ -308,8 +338,6 @@
     }
     // 승부 때는 맞수와 나 사이를 본다
     let fxx = p.x, fyy = p.y - 8;
-    const b = G.duel.boss;
-    if (b && G.duel.state) { fxx = p.x * 0.62 + b.x * 0.38; fyy = (p.y - 8) * 0.62 + (b.y - 8) * 0.38; }
     const gx = G.clamp(fxx - G.W / 2, 0, m.w * 16 - G.W), gy = G.clamp(fyy - G.H / 2, 0, m.h * 16 - G.H);
     camx += (gx - camx) * 0.18; camy += (gy - camy) * 0.18;
   }
@@ -319,6 +347,8 @@
     G.s = saved || fresh();
     const s = G.s;
     s.flags = s.flags || {}; s.seen = s.seen || {}; s.skills = s.skills || {}; s.inv = s.inv || {};
+    // 차례 싸움 이전의 기록이면 체력을 새 셈으로 옮긴다
+    if (!s.lv) { s.lv = 1 + Object.keys(s.skills).length * 2; s.exp = 0; s.maxhp = 40 + Math.max(0, s.maxhp - 5) * 10 + (s.lv - 1) * 5; s.hp = s.maxhp; }
     if (!G.world.has(s.map)) { s.map = 'hub'; s.x = G.HUB.gx(0); s.y = G.HUB.gy; }
     G.ui.reset();
     enter(s.map, s.x, s.y, 'down');
@@ -367,7 +397,33 @@
       if (pr.label) G.text.drawS(ctx, pr.label, Math.round(pr.x - cx), Math.round(pr.y - cy) + 5, open ? '#e6cc78' : '#8e8f8c', 'small', 1);
     }
   }
+  // 싸움 배경: 지금 서 있는 들을 HUD 없이 한 장 떠 둔다
+  function backdrop() {
+    noHud = true; render(); noHud = false;
+    const c = G.art.cv(G.W, G.H); c.getContext('2d').drawImage(canvas, 0, 0);
+    return c;
+  }
   function render() {
+    if (state === 'battle') {
+      G.battle.draw(ctx, time);
+      if (fade.a > 0) { ctx.fillStyle = 'rgba(12,11,15,' + Math.min(1, fade.a).toFixed(3) + ')'; ctx.fillRect(0, 0, G.W, G.H); }
+      return;
+    }
+    if (state === 'battleIn') {
+      // 칼금 하나가 지나가고 화면이 갈라진다
+      ctx.drawImage(battleBg, 0, 0);
+      const k = Math.min(1, transT / 0.7);
+      if (k < 0.3) {
+        const t = k / 0.3;
+        ctx.fillStyle = '#f6f1e3';
+        for (let i = 0; i < 3; i++) ctx.fillRect(0, Math.round(G.H / 2 - 1 + i), Math.round(G.W * t), 1);
+      } else {
+        const t = (k - 0.3) / 0.7, h = Math.round(G.H / 2 * t * t);
+        ctx.fillStyle = '#0c0b0f'; ctx.fillRect(0, 0, G.W, h); ctx.fillRect(0, G.H - h, G.W, h);
+        ctx.fillStyle = '#e6cc78'; ctx.fillRect(0, h, G.W, 1); ctx.fillRect(0, G.H - h - 1, G.W, 1);
+      }
+      return;
+    }
     const sx = shakeAmt ? Math.round((Math.random() - 0.5) * shakeAmt) : 0, sy = shakeAmt ? Math.round((Math.random() - 0.5) * shakeAmt) : 0;
     const cx = Math.round(camx) + sx, cy = Math.round(camy) + sy;
     const m = G.world.cur;
@@ -423,10 +479,10 @@
     }
     if (fx.dark > 0) { ctx.fillStyle = 'rgba(12,11,15,' + (fx.dark * 0.55).toFixed(2) + ')'; ctx.fillRect(0, 0, G.W, G.H); }
 
-    if (state === 'title') drawTitle();
+    if (noHud) { /* 싸움 배경으로 뜰 때 */ }
+    else if (state === 'title') drawTitle();
     else {
       G.ui.hud(ctx, time);
-      if (G.duel.boss && G.duel.state === 'fight') G.ui.bossBar(ctx, G.duel.boss);
       G.ui.draw(ctx, time);
     }
     if (fx.flash > 0) { ctx.fillStyle = 'rgba(246,241,227,' + Math.min(0.7, fx.flash * 2.4).toFixed(2) + ')'; ctx.fillRect(0, 0, G.W, G.H); }
@@ -471,6 +527,14 @@
   }
 
   G.main = {
+    backdrop,
+    // 싸움을 연다
+    toBattle(o) {
+      if (state !== 'play') return;
+      G.p.st = 'idle'; G.p.moving = false; G.input.clear();
+      battleBg = backdrop(); o.bg = battleBg; pending = o; transT = 0; state = 'battleIn';
+      G.sfx('cut'); G.music.play(null);
+    },
     start() {
       canvas = document.getElementById('game');
       canvas.width = G.W; canvas.height = G.H;
@@ -491,7 +555,9 @@
     debug: {
       get state() { return state; }, get time() { return time; }, enter, begin, render,
       tick(n) { for (let i = 0; i < n; i++) { update(); G.input.endFrame(); } render(); },
-      cam() { return [camx, camy]; }
+      cam() { return [camx, camy]; },
+      forceBattle() { state = 'battle'; },
+      ticks(n) { for (let i = 0; i < n; i++) { update(); G.input.endFrame(); } }
     }
   };
 })();

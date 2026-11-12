@@ -4,11 +4,11 @@
   const G = window.G;
 
   G.ITEMS = {
-    rice: { name: '주먹밥', heal: 2, desc: '물 건너에서도 밥은 뭉쳐서 들고 다닌다. 감 둘만큼 기운이 난다.' },
-    dango: { name: '경단', heal: 1, desc: '꼬치에 꿴 경단. 감 하나만큼 기운이 난다.' },
-    mochi: { name: '구운 떡', heal: 3, desc: '겉은 타고 속은 늘어진다. 감 셋만큼 기운이 난다.' },
-    gotgam: { name: '곶감', heal: 1, desc: '고향에서 싸 온 것. 감 하나만큼 기운이 난다. 아껴 먹는다.' },
-    tea: { name: '가루차', ki: 1, desc: '쓰다. 마시면 기가 한 칸 찬다.' },
+    rice: { name: '주먹밥', heal: 35, desc: '물 건너에서도 밥은 뭉쳐서 들고 다닌다. 체력이 35 오른다.' },
+    dango: { name: '경단', heal: 18, desc: '꼬치에 꿴 경단. 체력이 18 오른다.' },
+    mochi: { name: '구운 떡', heal: 70, desc: '겉은 타고 속은 늘어진다. 체력이 70 오른다.' },
+    gotgam: { name: '곶감', heal: 25, desc: '고향에서 싸 온 것. 체력이 25 오른다. 아껴 먹는다.' },
+    tea: { name: '가루차', ki: 1, desc: '쓰다. 마시면 기가 한 칸 찬다. 싸움 중에는 두 칸.' },
     crab: { name: '게', sell: 2, desc: '바닷가에서 잡았다. 등딱지가 성난 얼굴 같다.' },
     blade: { name: '부러진 칼', sell: 6, desc: '싸움터에 버려진 것. 쇠는 쇠다.' },
     meat: { name: '멧돼지 고기', sell: 7, desc: '질기지만 고기는 고기다.' },
@@ -36,7 +36,6 @@
     wheel: { name: '수레걸이', kanji: '車懸り', from: '우에스기 겐신', cost: 1, desc: '수레바퀴처럼 돌며 밀고 들어간다. 둘레를 다 벤다.' },
     swallow: { name: '제비 돌리기', kanji: '燕返し', from: '사사키 고지로', cost: 1, desc: '내려 벤 칼이 그대로 되돌아 올라온다. 뛰어오른 것도 벤다.' }
   };
-  G.SKILL_ORDER = ['leap', 'decoy', 'hitotsu', 'wheel', 'swallow'];
 
   // sell: 가게가 파는 값, buys: 가게가 사 주는 값(없으면 물건에 적힌 값)
   G.SHOPS = {
