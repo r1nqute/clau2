@@ -317,7 +317,19 @@
         if (s.flags.crabN === 5) G.ui.toast('게 다섯 마리를 보냈다. 어부 영감에게 가자.');
       }
     },
-    kill(e, s) { if (e.kind === 'heike') s.flags.crabKilled = 1; }
+    kill(e, s) { if (e.kind === 'heike') s.flags.crabKilled = 1; },
+    use(pr, s) {
+      if (pr.id !== 'myboat') return;
+      const f = s.flags;
+      if (f.potter === 1 && !f.soil) {
+        me(['타고 온 배다. 밑창에 흙이 한 줌 깔려 있다. 떠나던 날 신에서 떨어진 고려의 흙이다.', '사백 년 뒤의 누군가가 이것을 아쉬워한다. 긁어 담았다.']);
+        G.ui.run(() => { f.soil = 1; G.game.give('soil', 1); });
+        return;
+      }
+      const lines = G.LOOKS.rowboat;
+      me(lines[Math.min(f.look_myboat || 0, lines.length - 1)]);
+      f.look_myboat = (f.look_myboat || 0) + 1;
+    }
   });
   ST.quest((s, add) => {
     const f = s.flags;

@@ -36,7 +36,7 @@
       ],
       // 붙잡아 내던진다. 막을 수 없다.
       grab: () => [
-        S.tele(0.62, 'r', { track: 0.85 }),
+        S.tele(0.62, 'r', { track: 0.7 }),
         S.act(0.26, {
           on: e => { e.hitOnce = false; G.sfx('dash'); },
           tick: (e, dt) => {
@@ -86,7 +86,7 @@
   // 잘 막고, 잘 속인다. 짚 인형 사이에 섞이고, 통나무를 굴리고, 망루에서 화살을 부른다.
   duel.define('kusunoki', {
     name: '마사시게', full: '구스노키 마사시게', kanji: '楠木正成', title: '지지 않는 자',
-    hp: 84, post: 115, spd: 58, r: 6, cy: 9, hx: 4, hy: 8, spr: 'kusunoki', wpn: 'tachi', guard: 0.62, keep: 28, music: 'duel', seesThrough: true,
+    hp: 100, post: 115, spd: 58, r: 6, cy: 9, hx: 4, hy: 8, spr: 'kusunoki', wpn: 'tachi', guard: 0.62, keep: 28, music: 'duel', seesThrough: true,
     init(e) { e.cdT = 1; },
     onHit(e) { if (e.still) { e.still = false; duel.stagger(e, 0.9); fx.text(e.x, e.y - 26, '들켰다', '#e6cc78'); } },
     pick(e, dist) {
@@ -198,15 +198,15 @@
       }
     }
   }, o));
-  deshi(1, { name: '첫째 문하생', full: '가시마의 문하생', kanji: '初伝', title: '신토류 첫 단', hp: 26, guard: 0.35, lvl: 0, spr: 'deshi' });
-  deshi(2, { name: '둘째 문하생', full: '가시마의 문하생', kanji: '中伝', title: '신토류 가운데 단', hp: 32, guard: 0.5, lvl: 1, spr: 'deshi2' });
-  deshi(3, { name: '맏제자', full: '가시마의 맏제자', kanji: '奥伝', title: '신토류 깊은 단', hp: 40, guard: 0.62, lvl: 2, spr: 'deshi3', spd: 60 });
+  deshi(1, { name: '첫째 문하생', full: '가시마의 문하생', kanji: '初伝', title: '신토류 첫 단', hp: 30, guard: 0.35, lvl: 0, spr: 'deshi' });
+  deshi(2, { name: '둘째 문하생', full: '가시마의 문하생', kanji: '中伝', title: '신토류 가운데 단', hp: 38, guard: 0.5, lvl: 1, spr: 'deshi2' });
+  deshi(3, { name: '맏제자', full: '가시마의 맏제자', kanji: '奥伝', title: '신토류 깊은 단', hp: 48, guard: 0.62, lvl: 2, spr: 'deshi3', spd: 60 });
 
   // ======================= 쓰카하라 보쿠덴 =======================
   // 먼저 치지 않는다. 치면 막고, 막으면 받아친다. 한 번씩 칼을 내리고 숨을 고른다. 그것이 일지태도다.
   duel.define('bokuden', {
     name: '보쿠덴', full: '쓰카하라 보쿠덴', kanji: '塚原卜伝', title: '검성 · 싸우지 않고 이기는 자',
-    hp: 84, post: 105, spd: 42, r: 6, cy: 9, hx: 4, hy: 8, spr: 'bokuden', wpn: 'tachi', guard: 0.9, counter: 0.6, counterMove: 'riposte', keep: 34, music: 'duel',
+    hp: 110, post: 105, spd: 42, r: 6, cy: 9, hx: 4, hy: 8, spr: 'bokuden', wpn: 'tachi', guard: 0.9, counter: 0.6, counterMove: 'riposte', keep: 34, music: 'duel',
     seesThrough: true, recoil: 0.55, ready: -0.3,
     init(e) { e.wait = true; e.cdH = 3; },
     pick(e, dist) {

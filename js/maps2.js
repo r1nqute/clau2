@@ -45,7 +45,7 @@
     for (const [x, y] of [[86, 18], [98, 19], [87, 25], [98, 25]]) { K.prop('boulder', x, y, { x: x * 16 + 8 }); K.block(x, y); }
     m.arenas.asahina = { x0: 85 * 16 + 8, y0: 16 * 16, x1: 99 * 16 + 8, y1: 27 * 16 };
     K.prop('door', 96, 17, { x: 96 * 16, y: 17 * 16 + 12, id: 'asadoor' });
-    K.put('jizo', 81, 35, { use: 'save', id: 'kama_pass' });
+    K.put('jizo', 75, 32, { use: 'save', id: 'kama_pass' });
     K.put('sign', 76, 36, { use: 'sign', id: 'kama_pass' });
     // 와다 저택과 호조 저택
     K.house('minka', 31, 28); K.house('minka', 38, 29);

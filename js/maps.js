@@ -129,7 +129,7 @@
     K.put('nets', 30, 47, {}, true); K.put('nets', 33, 48, {}, true);
     K.put('hay', 9, 40); K.put('fire', 21, 41, { anim: true, light: 50 });
     K.path([[14, 51], [17, 46], [21, 43]], 2, T.DIRT, 1);
-    K.prop('rowboat', 11, coast(11) + 1, { use: 'look', id: 'myboat', reach: 6 }); K.block(10, coast(11) + 1, 2, 1, 2);
+    K.prop('rowboat', 11, coast(11) + 1, { use: 'story', id: 'myboat', reach: 6 }); K.block(10, coast(11) + 1, 2, 1, 2);
     K.prop('boat', 24, coast(24), { x: 24 * 16 }); K.block(23, coast(24), 2, 1, 2);
     K.npc('fisher', 31, 49); K.npc('ama', 38, coast(38) - 1); K.npc('kid', 20, 46); K.npc('monk', 46, coast(46) - 1);
     m.safe.push([21, 41, 12]);

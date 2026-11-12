@@ -279,6 +279,8 @@
     card(lines, o) { enq(Object.assign({ k: 'card', lines, t: 0 }, o || {})); },
     // 승부 알림. 끝나면 cb
     cutin(def, cb) { enq({ k: 'cutin', def, cb, t: 0 }); },
+    // 장면: d초 동안 tick(dt, k)을 돌린다. 그동안 말은 멈추고 세상만 움직인다.
+    scene(d, tick, on) { enq({ k: 'scene', d, t: 0, tick, on }); },
     busy() { return cur !== null || q.length > 0 || menu.open; },
     talking() { return cur !== null || q.length > 0; },
     openMenu(tab) { menu.open = true; menu.tab = tab || 0; menu.sel = 0; G.sfx('move'); },
@@ -313,6 +315,14 @@
           }
         } else if (cur.k === 'shop') shopUpdate(cur);
         else if (cur.k === 'card') { cur.t += dt; if (cur.t > 0.8 + cur.lines.length * 0.45 + 0.6 && I.ok()) next(); }
+        else if (cur.k === 'scene') {
+          const c = cur;
+          if (c.t === 0 && c.on) c.on();
+          c.t += dt;
+          if (c.tick) c.tick(dt, Math.min(1, c.t / c.d));
+          G.fx.update(dt);
+          if (c.t >= c.d && cur === c) next();
+        }
         else if (cur.k === 'cutin') {
           const c = cur;
           if (c.t === 0) { G.sfx('taiko'); G.sfx('clap'); }

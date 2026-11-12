@@ -392,6 +392,7 @@
           const reach = d.reach || 24;
           if (e.st === 'idle' || e.st === 'chase') {
             if (dist < (d.sight || 90) || (e.st === 'chase' && dist < (d.sight || 90) + 50) || (e.hp < d.hp && dist < 200)) {
+              if (e.st !== 'chase' && !G.s.flags.sawFoe) { G.s.flags.sawFoe = 1; G.ui.toast('X를 누르고 있으면 막는다. Space로 비킨다.'); }
               e.st = 'chase';
               if (dist > reach - 3) { const k = dist > 46 ? 0.4 : 0; go((ux - uy * k * e.side) * d.spd, (uy + ux * k * e.side) * d.spd); }
               else if (dist < reach - 13) go(-ux * d.spd * 0.6, -uy * d.spd * 0.6);

@@ -14,7 +14,7 @@
   // 안개 속을 수레바퀴처럼 돌다가 말을 몰아 지나간다. 말머리를 돌리는 사이가 틈이다. 절반쯤 깎이면 내린다.
   duel.define('kenshin', {
     name: '겐신', full: '우에스기 겐신', kanji: '上杉謙信', title: '군신 · 비사문천의 화신',
-    hp: 116, post: 125, spd: 62, r: 7, cy: 10, hx: 5, hy: 9, spr: 'kenshin', wpn: 'tachi', guard: 0.55, keep: 30, music: 'duel2', recoil: 0.6,
+    hp: 150, post: 125, spd: 62, r: 7, cy: 10, hx: 5, hy: 9, spr: 'kenshin', wpn: 'tachi', guard: 0.55, keep: 30, music: 'duel2', recoil: 0.6,
     init(e) { e.mounted = true; e.sprSet = 'kenshinH'; e.lift = 12; e.ang = 3.14; e.guard = 0; e.cd = 1.2; },
     dismount(e) {
       if (!e.mounted) return;
@@ -45,7 +45,7 @@
     moves: {
       // 말을 몰아 지나가며 벤다
       charge: () => [
-        S.tele(0.62, 'r', { p: [-1.3, -1.9], track: 0.92, on: e => { e.lane = true; G.sfx('hoof'); } }),
+        S.tele(0.7, 'r', { p: [-1.3, -1.9], track: 0.6, on: e => { e.lane = true; G.sfx('hoof'); } }),
         S.act(0.8, {
           p: [-1.9, 1.2], on: e => { e.hitOnce = false; e.lane = false; },
           tick: (e, dt) => {
@@ -75,7 +75,7 @@
           on: e => { e.tk2 = 0; },
           tick: (e, dt, k) => {
             const tg = duel.tg(e); e.aa = Math.atan2(tg.y - e.y, tg.x - e.x);
-            duel.lunge(e, 80, dt, 0.85); e.wa = k * 22;
+            duel.lunge(e, 54, dt, 0.85); e.wa = k * 22;
             e.tk2 -= dt;
             if (e.tk2 <= 0) {
               e.tk2 = 0.17; G.sfx('swing');
@@ -99,7 +99,7 @@
   // 칼이 길다. 멀리서 찌르고 넓게 벤다. 내려 벤 칼이 곧바로 되돌아 올라온다.
   duel.define('kojiro', {
     name: '고지로', full: '사사키 고지로', kanji: '佐々木小次郎', title: '간류 · 제비를 베는 자',
-    hp: 94, post: 105, spd: 64, r: 6, cy: 9, hx: 4, hy: 8, spr: 'kojiro', wpn: 'longbok', guard: 0.6, evade: 0.22, keep: 40, music: 'duel2', recoil: 0.6,
+    hp: 130, post: 105, spd: 64, r: 6, cy: 9, hx: 4, hy: 8, spr: 'kojiro', wpn: 'longbok', guard: 0.6, evade: 0.22, keep: 40, music: 'duel2', recoil: 0.6,
     pick(e, dist) {
       const r = Math.random();
       if (dist > 74) return r < 0.7 ? 'reach' : null;
@@ -143,7 +143,7 @@
   };
   duel.define('musashi', {
     name: '무사시', full: '미야모토 무사시', kanji: '宮本武蔵', title: '예순 번을 겨뤄 진 적 없는 자',
-    hp: 136, post: 135, spd: 68, r: 6, cy: 9, hx: 4, hy: 8, spr: 'musashi', wpn: 'oar', guard: 0.7, counter: 0.4, counterMove: 'smash', keep: 32, music: 'duel2',
+    hp: 190, post: 135, spd: 68, r: 6, cy: 9, hx: 4, hy: 8, spr: 'musashi', wpn: 'oar', guard: 0.7, counter: 0.4, counterMove: 'smash', keep: 32, music: 'duel2',
     seesThrough: true, recoil: 0.5,
     init(e) { e.two = false; e.guard = undefined; },
     pick(e, dist) {
@@ -199,7 +199,7 @@
   // 느리다. 거의 다 막는다. 가끔 두 자루를 다 내리고 선다. 그때 치면 진다. 기다리면 그가 한 걸음 물러선다.
   duel.define('musashiOld', {
     name: '무사시', full: '니텐 무사시', kanji: '二天', title: '빈 것을 쓰는 사람',
-    hp: 96, post: 110, spd: 34, r: 6, cy: 9, hx: 4, hy: 8, spr: 'musashiOld', wpn: 'bokken', guard: 0.9, counter: 0.7, counterMove: 'answer', keep: 34, music: 'last',
+    hp: 140, post: 110, spd: 34, r: 6, cy: 9, hx: 4, hy: 8, spr: 'musashiOld', wpn: 'bokken', guard: 0.9, counter: 0.7, counterMove: 'answer', keep: 34, music: 'last',
     seesThrough: true, recoil: 0.6, ready: -0.2,
     init(e) { e.wait = true; e.cdV = 2; e.void = false; },
     // 빈 자세일 때 치면 되받는다

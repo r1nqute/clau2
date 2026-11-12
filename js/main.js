@@ -196,6 +196,7 @@
     onKill(e) { G.s.kills = (G.s.kills || 0) + 1; G.STORY.onKill(e); },
     // 어둠을 거쳐 다른 곳으로
     go(map, x, y, dir, o) { fadeTo(() => enter(map, x, y, dir, o)); },
+    snap() { snapCam(); },
     fadeTo
   };
 
@@ -363,7 +364,7 @@
       const f = state === 'title' ? {} : G.s.flags;
       const open = pr.gate === 'home' ? f.feather : f['gate' + pr.gate];
       if (!open) ctx.drawImage(G.spr.rope, Math.round(pr.x - cx) - 21, Math.round(pr.y - cy) - 34);
-      if (pr.label) G.text.drawS(ctx, pr.label, Math.round(pr.x - cx), Math.round(pr.y - cy) - 72, open ? '#e6cc78' : '#8e8f8c', 'small', 1);
+      if (pr.label) G.text.drawS(ctx, pr.label, Math.round(pr.x - cx), Math.round(pr.y - cy) + 5, open ? '#e6cc78' : '#8e8f8c', 'small', 1);
     }
   }
   function render() {

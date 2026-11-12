@@ -124,7 +124,7 @@
     K.put('well', 23, 41); K.put('taru', 14, 39, {}, true); K.put('taru', 20, 39, {}, true); K.put('cart', 34, 45, {}, true);
     K.put('jizo', 36, 41, { use: 'save', id: 'funa_town' });
     K.put('toro', 8, 42, { light: 24, ldy: -12 });
-    K.npc('agent', 17, 39); K.npc('townswoman', 32, 44); K.npc('kid2', 26, 42); K.npc('official', 13, 41);
+    K.npc('agent', 17, 39); K.npc('townswoman', 32, 44); K.npc('smith', 29, 46, { id2: 'polisher' }); K.npc('kid2', 26, 42); K.npc('official', 13, 41);
     m.safe.push([22, 41, 15]);
     // 나루와 삭은 배
     K.rect(30, coast(30) - 1, 2, 7, T.DECK);
@@ -200,7 +200,7 @@
     K.blob(24, 18, 14, 6.4, T.SAND, false, 0.3);
     K.blob(27, 15, 6, 2.6, T.GRASS, false, 0.4);
     K.rect(13, 9, 2, 5, T.DECK);
-    K.prop('rowboat', 16, 9, { flat: false }); K.block(15, 9, 2, 1, 2);
+    K.prop('rowboat', 15, 10, { x: 16 * 16, use: 'story', id: 'isleboat', reach: 8 }); K.block(15, 10, 2, 1, 2);
     K.prop('jinmakuK', 35, 14, { x: 35 * 16 + 8 }); K.block(34, 14, 3, 1);
     K.put('nb_kuyo', 32, 14, { anim: 2.3 }); K.put('nb_kuyo', 38, 15, { anim: 2.6 });
     K.npc('official', 34, 16, { id2: 'witness1' }); K.npc('official', 37, 17, { id2: 'witness2', face: 'l' });

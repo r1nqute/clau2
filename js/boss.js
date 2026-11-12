@@ -48,6 +48,8 @@
       if (!e.seq || e.si >= e.seq.length) { e.seq = null; e.st = 'idle'; e.tk = null; e.zone = null; return; }
       const s = e.seq[e.si];
       e.st = s.st; e.tk = s.tk; e.t = s.d; e.cur = s;
+      if (s.tk === 'r' && !G.s.flags.sawRed) { G.s.flags.sawRed = 1; G.ui.toast('붉은 번쩍임은 막을 수 없다. 보법(Space)으로 비켜라.'); }
+      else if (s.tk === 'w' && !G.s.flags.sawWhite) { G.s.flags.sawWhite = 1; G.ui.toast('흰 번쩍임은 막을 수 있다. 맞는 순간에 막으면 쳐낸다.'); }
       if (s.on) s.on(e);
     },
     tg(e) { return E.tgt(e); },
