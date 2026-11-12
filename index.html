@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>칼 너머</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  @font-face { font-family: 'Galmuri11'; src: url('assets/fonts/Galmuri11.woff2') format('woff2'); font-display: block; }
+  @font-face { font-family: 'Galmuri9'; src: url('assets/fonts/Galmuri9.woff2') format('woff2'); font-display: block; }
+  /* 한 화면짜리 게임. 먹빛 한 가지로만 간다. */
+  :root { --ink: #0c0b0f; --paper: #e8e2d0; --dim: #8e8f8c; --straw: #e6cc78; --seal: #c8452f; color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); overflow: hidden; overscroll-behavior: none; }
+  body { box-sizing: border-box; display: flex; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #stage { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; max-width: 100%; image-rendering: pixelated; image-rendering: crisp-edges; background: var(--ink); }
+  #wait { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font: 14px system-ui, sans-serif; }
+  #touch { display: none; }
+  .tb { position: fixed; box-sizing: border-box; border: 2px solid rgba(232,226,208,.5); background: rgba(27,26,31,.45); color: rgba(246,241,227,.85);
+        font: 12px 'Galmuri11', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .tb.on { background: rgba(230,204,120,.45); }
+  .tb.sm { font-size: 10px; font-family: 'Galmuri9', system-ui, sans-serif; }
+  #pad { left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 132px; height: 132px; }
+  #pad i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px; border-radius: 50%; background: rgba(232,226,208,.4); }
+  #bA { right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(54px + env(safe-area-inset-bottom, 0px)); width: 68px; height: 68px; border-color: rgba(200,69,47,.8); }
+  #bB { right: calc(90px + env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 60px; height: 60px; }
+  #bD { right: calc(96px + env(safe-area-inset-right, 0px)); bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 52px; height: 52px; }
+  #bC { right: calc(24px + env(safe-area-inset-right, 0px)); bottom: calc(132px + env(safe-area-inset-bottom, 0px)); width: 52px; height: 52px; }
+  #bE { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(162px + env(safe-area-inset-bottom, 0px)); width: 42px; height: 42px; }
+  #bQ { left: calc(72px + env(safe-area-inset-left, 0px)); bottom: calc(162px + env(safe-area-inset-bottom, 0px)); width: 42px; height: 42px; }
+  #bM { right: calc(14px + env(safe-area-inset-right, 0px)); top: calc(10px + env(safe-area-inset-top, 0px)); width: 52px; height: 30px; border-radius: 6px; }
+  @media (pointer: coarse) {
+    #touch { display: block; }
+  }
+  @media (pointer: coarse) and (orientation: portrait) {
+    #stage { align-items: flex-start; }
+    #bM { top: auto; bottom: calc(214px + env(safe-area-inset-bottom, 0px)); }
+  }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="game" width="384" height="216"></canvas></div>
+<div id="wait">…</div>
+<div id="touch">
+  <div class="tb" id="pad"><i></i></div>
+  <div class="tb" id="bA" data-a="a">베기</div>
+  <div class="tb" id="bB" data-a="b">막기</div>
+  <div class="tb" id="bC" data-a="c">비기</div>
+  <div class="tb" id="bD" data-a="d">보법</div>
+  <div class="tb sm" id="bE" data-a="e">먹기</div>
+  <div class="tb sm" id="bQ" data-a="q">바꿈</div>
+  <div class="tb sm" id="bM" data-a="menu">봇짐</div>
+</div>
+<script src="js/core.js"></script>
+<script src="js/art.js"></script>
+<script src="js/art2.js"></script>
+<script src="js/world.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/maps2.js"></script>
+<script src="js/maps3.js"></script>
+<script src="js/data.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/player.js"></script>
+<script src="js/boss.js"></script>
+<script src="js/boss2.js"></script>
+<script src="js/boss3.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/story.js"></script>
+<script src="js/story2.js"></script>
+<script src="js/story3.js"></script>
+<script src="js/main.js"></script>
+<script>
+(function () {
+  // 손가락 조작
+  var pad = document.getElementById('pad'), knob = pad.firstElementChild;
+  function padSet(e) {
+    var r = pad.getBoundingClientRect();
+    var dx = (e.clientX - r.left) / r.width - 0.5, dy = (e.clientY - r.top) / r.height - 0.5;
+    var dead = 0.12;
+    G.input.set('left', dx < -dead && Math.abs(dx) > Math.abs(dy) * 0.45);
+    G.input.set('right', dx > dead && Math.abs(dx) > Math.abs(dy) * 0.45);
+    G.input.set('up', dy < -dead && Math.abs(dy) > Math.abs(dx) * 0.45);
+    G.input.set('down', dy > dead && Math.abs(dy) > Math.abs(dx) * 0.45);
+    var l = Math.hypot(dx, dy) || 1, k = Math.min(1, 0.36 / l);
+    knob.style.transform = 'translate(' + dx * k * r.width + 'px,' + dy * k * r.height + 'px)';
+  }
+  function padOff() {
+    ['left', 'right', 'up', 'down'].forEach(function (a) { G.input.set(a, false); });
+    knob.style.transform = '';
+  }
+  pad.addEventListener('pointerdown', function (e) { e.preventDefault(); pad.setPointerCapture(e.pointerId); G.audio.wake(); padSet(e); });
+  pad.addEventListener('pointermove', function (e) { if (pad.hasPointerCapture(e.pointerId)) padSet(e); });
+  pad.addEventListener('pointerup', padOff);
+  pad.addEventListener('pointercancel', padOff);
+  Array.prototype.forEach.call(document.querySelectorAll('.tb[data-a]'), function (b) {
+    var a = b.getAttribute('data-a');
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); G.audio.wake(); G.input.set(a, true); b.classList.add('on'); });
+    var up = function () { G.input.set(a, false); b.classList.remove('on'); };
+    b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
+  });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  document.getElementById('game').addEventListener('pointerdown', function () { G.audio.wake(); });
+
+  function go() { var w = document.getElementById('wait'); if (w) w.remove(); G.main.start(); }
+  var done = false, once = function () { if (!done) { done = true; go(); } };
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load('12px Galmuri11', '칼 너머'), document.fonts.load('10px Galmuri9', '칼 너머')]).then(once, once);
+    setTimeout(once, 4000);
+  } else once();
+})();
+</script>
+</body>
+</html>

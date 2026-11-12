@@ -518,6 +518,18 @@
     rect(x, PAL.k, 3, 0, 8, 2);
     c.ax = 11; return c;
   }
+  // 큰 배의 둥근 끝. 갑판 오른쪽에 붙인다.
+  function hullEnd() {
+    const c = cv(20, 48), x = c.getContext('2d');
+    for (let Y = 0; Y < 48; Y++) {
+      const t = (Y - 23.5) / 24, w = Math.round(19 * (1 - t * t));
+      if (w <= 0) continue;
+      rect(x, PAL.k, 0, Y, w + 1, 1);
+      rect(x, Y > 41 ? '#46301f' : Y % 5 === 0 ? '#6b4a32' : '#8f6f48', 0, Y, w, 1);
+      if (Y < 3) rect(x, '#46301f', 0, Y, w, 1);
+    }
+    c.ax = 10; return c;
+  }
   // 돛대. 돛은 말아 올렸고 깃발이 달렸다.
   function mast(flag) {
     const c = cv(30, 64), x = c.getContext('2d');
@@ -777,6 +789,7 @@
     S.well = well(); S.kiln = kiln();
     S.boat = boat(false); S.wreck = boat(true); S.rowboat = boat(false, true);
     S.prow = prow(); S.mastW = mast('#e8e2d0'); S.mastR = mast('#a63c2e');
+    S.hullR = hullEnd(); S.hullL = flip(S.hullR);
     S.cavemouth = caveMouth(); S.fence = fence(); S.hasa = hasa();
     S.fin = [fin(0), fin(1)];
     S.door = door(); S.log = [logRoll(0), logRoll(1)]; S.logpile = logPile();

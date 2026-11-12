@@ -69,9 +69,14 @@
         if (p.hitSet) p.hitSet.add(e);
         if (E.hurtEnemy(e, dmg, post, p.x, p.y, o)) n++;
       }
+      for (const e of E.list) {
+        if (e.type !== 'fake' || e.dead || !this.test(shape, e.x, e.y - 9, 6)) continue;
+        e.dead = true; fx.puff(e.x, e.y - 9, '#e6cc78', 12, 70); G.sfx('hit');
+        if (!G.s.flags.sawFake) { G.s.flags.sawFake = 1; G.ui.toast('짚이다.'); }
+      }
       // 날아오는 화살은 벤다
       for (const e of E.list) {
-        if (e.type !== 'proj' || e.dead || e.hitE || e.kind === 'bullet' || e.heavy) continue;
+        if (e.type !== 'proj' || e.dead || e.hitE || e.kind === 'bullet' || e.heavy || e.grav) continue;
         if (this.test(shape, e.x, e.y - 8, 3)) { e.dead = true; fx.spark(e.x, e.y - 8, 5); G.sfx('clang'); p.gainKi(0.12); }
       }
       return n;
@@ -224,7 +229,8 @@
           } else if (e.t > 90) e.dead = true;
           continue;
         }
-        if (e.type === 'decoy') { e.t -= dt; if (e.t <= 0) { e.dead = true; fx.puff(e.x, e.y - 8, '#cfa64a', 8, 40); } continue; }
+        if (e.type === 'decoy' || e.type === 'fake') { e.t -= dt; if (e.t <= 0) { e.dead = true; fx.puff(e.x, e.y - 8, '#cfa64a', 8, 40); } continue; }
+        if (e.type === 'actor') { e.t = (e.t || 0) + dt; if (e.think) e.think(e, dt); continue; }
         if (e.type === 'proj') { this.proj(e, dt, p); continue; }
         if (e.boss) { G.duel.think(e, dt); continue; }
         this.ai(e, dt, p, safe);
@@ -244,7 +250,8 @@
         return;
       }
       const tx = Math.floor(e.x / 16), ty = Math.floor(e.y / 16);
-      if (e.t <= 0 || G.world.tallTile(tx, ty)) { e.dead = true; fx.puff(e.x, e.y - 8, '#c4a676', 3, 30); return; }
+      if (e.t <= 0 || (!e.fly && G.world.tallTile(tx, ty))) { e.dead = true; fx.puff(e.x, e.y - 8, '#c4a676', 3, 30); return; }
+      if (e.kind === 'log' && Math.random() < 0.3) fx.dust(e.x + (Math.random() - 0.5) * 20, e.y, 1);
       if (e.hitE) {
         for (const o of this.list) {
           if (o.type !== 'enemy' || o.dead) continue;
@@ -488,15 +495,36 @@
       ctx.drawImage(img, x - (img.width >> 1), y - img.height + Math.round(e.z) - (Math.floor(e.t * 3) % 2));
       return;
     }
-    if (e.type === 'decoy') {
+    if (e.type === 'decoy' || e.type === 'fake') {
       this.shadow(ctx, x, y - 1, 12);
       if (e.t < 1.2 && Math.floor(e.t * 10) % 2) return;
       ctx.drawImage(S.dummy, x - 7, y - S.dummy.height + 1);
       return;
     }
+    if (e.type === 'actor') {
+      let img = e.img || (S.f[e.spr] ? S.f[e.spr][e.dir || 'r'][e.walk ? Math.floor(e.t * 6) % 2 : 0] : S.npc[e.spr] || S[e.spr]);
+      if (Array.isArray(img)) img = img[Math.floor(e.t * 5) % img.length];
+      if (!img) return;
+      if (!e.flat) this.shadow(ctx, x, y - 1, img.width > 20 ? 20 : 12);
+      if (e.lie) { ctx.save(); ctx.translate(x, y - 5); ctx.rotate(1.5708); ctx.drawImage(img, -8, -9); ctx.restore(); return; }
+      ctx.drawImage(img, x - (img.width >> 1), y - img.height + 1 - Math.round(e.z || 0));
+      if (e.wpn && e.wa !== undefined) fx.blade(ctx, x + (e.dir === 'l' ? -4 : 4), y - 8, e.wa, e.wpn);
+      return;
+    }
     if (e.type === 'proj') {
       const yy = y - 8 - Math.round(e.z || 0);
       if (e.grav) fx.danger(ctx, Math.round(e.lx - cx), Math.round(e.ly - cy), e.rad || 16, 0.5 + 0.5 * Math.sin(time * 20));
+      if (e.kind === 'log') {
+        // 굴러오는 길이 붉게 보인다
+        const l = Math.hypot(e.vx, e.vy) || 1, ux = e.vx / l, uy = e.vy / l;
+        ctx.fillStyle = 'rgba(200,69,47,0.16)';
+        for (let i = 14; i < Math.min(150, e.t * l); i += 6) ctx.fillRect(Math.round(x + ux * i - Math.abs(uy) * 14 - 3), Math.round(y - 6 + uy * i - Math.abs(ux) * 5), Math.round(6 + Math.abs(uy) * 28), Math.round(6 + Math.abs(ux) * 8));
+        this.shadow(ctx, x, y, 26);
+        const lg = S.log[Math.floor(time * 10) % 2];
+        ctx.drawImage(lg, x - 15, y - 12);
+        return;
+      }
+      if (e.kind === 'arrowrain') { fx.arrow(ctx, x, yy, 1.5708); return; }
       if (e.kind === 'arrow') fx.arrow(ctx, x, yy, e.a);
       else if (e.kind === 'bullet') { ctx.fillStyle = '#1b1a1f'; ctx.fillRect(x - 2, yy - 2, 4, 4); ctx.fillStyle = '#e6cc78'; ctx.fillRect(x - 1, yy - 1, 2, 2); }
       else if (e.kind === 'mallet') { this.shadow(ctx, x, y, 8); fx.blade(ctx, x, yy, time * 14, 'mallet'); }

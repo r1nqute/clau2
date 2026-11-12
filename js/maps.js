@@ -18,7 +18,7 @@
   function homeGate(K, tx, ty, i, o) {
     K.torii(tx, ty, Object.assign({ gate: 'home' }, o || {}));
     for (const x of [tx, tx + 1]) K.warp(x, ty, 'hub', G.HUB.gx(i), G.HUB.gy, 'down', { need: 'feather', deny: '도리이다. 지나가 보았다. 도리이 뒤쪽이 나왔다.' });
-    K.m.arrive = { x: (tx + 1) * 16, y: (ty + 1) * 16 + 12 };
+    K.m.arrive = { x: (tx + 1) * 16, y: (o && o.north ? ty - 1 : ty + 1) * 16 + 12 };
   }
   G.mapTools = { homeGate };
 
@@ -40,7 +40,7 @@
       for (const x of [tx, tx + 1]) K.warp(x, 11, e.map, 0, 0, 'down', { need: 'gate' + i, arrive: true, deny: '금줄이 걸려 있다. 아직 지날 때가 아닌 모양이다.' });
     }
     K.blob(24, 20, 5, 2.5, T.DIRT, true);
-    K.put('jizo', 24, 16, { use: 'save', id: 'hub' });
+    K.put('jizo', 21, 16, { use: 'save', id: 'hub' });
     // 찻집
     K.house('chaya', 8, 20, { ground: T.HIGH, doorT: T.DIRT });
     K.prop('bench', 13, 22, { x: 14 * 16, y: 22 * 16 + 14 }); K.block(13, 22, 2, 1, 2); K.reserve(12, 21, 4, 3);
@@ -48,7 +48,7 @@
     K.put('taru', 7, 22, {}, true);
     // 신목과 덴구
     K.prop('goshinboku', 41, 16, { x: 41 * 16 + 8, y: 16 * 16 + 15 }); K.block(41, 16); K.reserve(39, 13, 5, 5);
-    K.npc('tengu', 39, 18);
+    K.npc('tengu', 41, 19);
     K.put('toro', 37, 16, { light: 26, ldy: -12 }); K.put('toro', 43, 19, { light: 26, ldy: -12 });
     // 짚단. 쳐 봐도 된다.
     for (const x of [19, 23, 27]) K.spawn('makiwara', x, 23, { fixed: 1 });
@@ -107,7 +107,7 @@
   W.define('dan', function () {
     const K = W.kit('dan', 112, 72, 1185), m = K.m;
     m.theme = 'spring'; m.music = 'sea'; m.weather = 'petal'; m.region = '단노우라';
-    m.title = { kanji: '壇ノ浦', name: '단노우라', sub: '겐랴쿠 2년 봄 · 겐페이 합전이 끝난 뒤' };
+    m.title = { kanji: '壇ノ浦', name: '단노우라', sub: '겐랴쿠 2년 봄 · 겐페이 합전이 끝난 뒤', year: 1185 };
     shore(K);
     const coast = K.coast;
 
@@ -152,7 +152,7 @@
       if (K.get(x, y) === T.WATER) K.prop(i % 5 ? 'floatR' : 'floatW', x, y, { flat: true, bob: K.r() * 6 });
     }
     // 뛰어야 닿는 모래톱
-    K.blob(62, 63, 2.6, 1.9, T.SAND, true, 0.2);
+    K.blob(62, 63, 2.6, 1.9, T.SAND, false, 0.2); K.reserve(59, 61, 7, 5);
     for (let y = coast(62) + 1; y <= 59; y++) for (let x = 60; x <= 64; x++) if (K.get(x, y) === T.WATER) K.set(x, y, T.SHALLOW);
     K.set(61, 60, T.WATER); K.set(62, 60, T.WATER); K.set(63, 60, T.WATER); K.set(60, 60, T.WATER); K.set(64, 60, T.WATER);
     K.put('chest', 62, 63, { use: 'chest', id: 'c_islet' });
@@ -171,7 +171,11 @@
     const py = coast(96);
     K.rect(96, py - 1, 2, 60 - py + 1, T.DECK);
     const boats = [[93, 60, 8, 3], [84, 62, 7, 3], [102, 62, 7, 3], [88, 66, 8, 3], [98, 66, 8, 3]];
-    for (const [x, y, w, h] of boats) K.rect(x, y, w, h, T.DECK);
+    for (const [x, y, w, h] of boats) {
+      K.rect(x, y, w, h, T.DECK);
+      K.prop('hullL', x, y, { x: x * 16 - 10, y: (y + h) * 16 - 1, flat: true });
+      K.prop('hullR', x, y, { x: (x + w) * 16 + 10, y: (y + h) * 16 - 1, flat: true });
+    }
     for (const [x, y] of [[91, 62], [92, 62], [101, 62], [89, 65], [94, 63], [94, 64], [94, 65], [104, 65], [96, 67], [97, 67]]) K.rect(x, y, 1, 1, T.DECK);
     K.put('mastW', 93, 60, { x: 93 * 16 + 8 }); K.put('mastW', 84, 62, { x: 84 * 16 + 8 }); K.put('mastW', 108, 62, { x: 108 * 16 + 8 });
     K.put('mastW', 88, 66, { x: 88 * 16 + 8 }); K.put('mastW', 105, 66, { x: 105 * 16 + 8 });

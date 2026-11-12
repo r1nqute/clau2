@@ -222,11 +222,17 @@
           const n = G.vnoise(wx / 38, wy / 38, t === T.GRASS ? 7 : 8);
           c = n > 0.63 ? C(g[2]) : n < 0.32 ? C(g[1]) : C(g[0]);
           if (h < 0.045) c = C(g[3]); else if (h > 0.965) c = C(g[4]);
-          if (TH.snowy && G.vnoise(wx / 9, wy / 7, 61) > 0.66) c = h < 0.2 ? C('#dfe6e2') : C('#f2f2ea');
+          if (TH.snowy && G.vnoise(wx / 26, wy / 18, 61) > 0.58) c = h < 0.12 ? C('#dfe6e2') : C('#f2f2ea');
           break;
         }
         case T.MOSS: {
           const n = G.vnoise(wx / 26, wy / 26, 12);
+          if (TH.snowy) {
+            c = n > 0.62 ? C('#7c866c') : n < 0.34 ? C('#626d58') : C('#6f7a62');
+            if (h < 0.06) c = C('#566050'); else if (h > 0.95) c = C('#6b5a3a');
+            if (G.vnoise(wx / 22, wy / 15, 61) > 0.5) c = h < 0.12 ? C('#dfe6e2') : C('#f2f2ea');
+            break;
+          }
           c = n > 0.62 ? C('#5a7440') : n < 0.34 ? C('#44603a') : C('#4f6a3c');
           if (h < 0.06) c = C('#3c5632'); else if (h > 0.96) c = C('#6a8448'); else if (h > 0.93) c = C('#6b5a3a');
           break;
@@ -234,7 +240,7 @@
         case T.DIRT:
           c = h < 0.06 ? C('#9a7a50') : h > 0.95 ? C('#c4a676') : C('#b08f62');
           if (grassy(terr[i - SZ]) || stone(terr[i - SZ])) c = C('#8f7049');
-          if (TH.snowy && G.vnoise(wx / 7, wy / 5, 63) > 0.74) c = C('#e4e6dc');
+          if (TH.snowy && G.vnoise(wx / 16, wy / 10, 63) > 0.74) c = C('#e4e6dc');
           break;
         case T.SAND:
           c = h < 0.06 ? C('#c6b27a') : h > 0.95 ? C('#e6d8a8') : C('#d6c48e');
@@ -265,7 +271,7 @@
             if (b0 !== b1) c = C('#5f5a54');
             else c = b0 & 1 ? C('#7d7870') : C('#746f68');
             if (h < 0.03) c = C('#666159'); else if (h > 0.975) c = C('#918b80');
-            if (TH.snowy && G.vnoise(wx / 8, wy / 6, 62) > 0.6) c = h < 0.2 ? C('#c9d3cf') : C('#e9ecea');
+            if (TH.snowy && G.fbm(wx / 44, wy / 30, 62) > 0.47) c = h < 0.08 ? C('#c9d3cf') : G.vnoise(wx / 12, wy / 8, 66) > 0.72 ? C('#dfe6e2') : C('#eef0ec');
           }
           break;
         }

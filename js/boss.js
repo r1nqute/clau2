@@ -94,22 +94,25 @@
       const want = d.ready === undefined ? -0.75 : d.ready;
       e.wa = e.fa + e.sg * want;
       if (d.roam) d.roam(e, dt, tg, dist);
-      else {
-        const keep = d.keep || 30, ux = dx / dist, uy = dy / dist;
-        const sp = d.spd * (e.phase === 2 ? 1.12 : 1);
-        if (dist > keep + 4) { this.go(e, (ux - uy * 0.35 * (e.side || 1)) * sp * dt, (uy + ux * 0.35 * (e.side || 1)) * sp * dt); }
-        else if (dist < keep - 10) this.go(e, -ux * sp * 0.6 * dt, -uy * sp * 0.6 * dt);
-        else this.go(e, -uy * sp * 0.4 * (e.side || 1) * dt, ux * sp * 0.4 * (e.side || 1) * dt);
-        if (Math.random() < 0.008) e.side = -(e.side || 1);
-      }
+      else this.roamDefault(e, dt, tg, dist);
       if (e.cd <= 0) {
-        const mv = d.pick(e, dist, tg);
+        const mv = e.want || d.pick(e, dist, tg);
+        e.want = null;
         if (mv && d.moves[mv]) {
           e.aa = e.fa; e.last = mv;
           this.run(e, d.moves[mv](e, tg, dist));
         } else e.cd = 0.25;
       }
       this.clamp(e);
+    },
+    roamDefault(e, dt, tg, dist) {
+      const d = e.def, dx = tg.x - e.x, dy = tg.y - e.y;
+      const keep = d.keep || 30, ux = dx / dist, uy = dy / dist;
+      const sp = d.spd * (e.phase === 2 ? 1.12 : 1);
+      if (dist > keep + 4) { this.go(e, (ux - uy * 0.35 * (e.side || 1)) * sp * dt, (uy + ux * 0.35 * (e.side || 1)) * sp * dt); }
+      else if (dist < keep - 10) this.go(e, -ux * sp * 0.6 * dt, -uy * sp * 0.6 * dt);
+      else this.go(e, -uy * sp * 0.4 * (e.side || 1) * dt, ux * sp * 0.4 * (e.side || 1) * dt);
+      if (Math.random() < 0.008) e.side = -(e.side || 1);
     },
     go(e, dx, dy) { e.mv = true; return E.move(e, dx, dy, 10, 7); },
     clamp(e) {
@@ -122,13 +125,13 @@
     // ---------- 맞수가 쓰는 수의 재료 ----------
     aim(e) { const tg = this.tg(e); e.aa = Math.atan2(tg.y - e.y, tg.x - e.x); e.dir = tg.x > e.x ? 'r' : 'l'; e.sg = e.dir === 'r' ? 1 : -1; return tg; },
     slash(e, o) {
-      const y = e.y - e.def.hy;
+      const y = e.y - e.def.hy - (e.lift || 0);
       fx.arc(e.x, y, e.aa, o.r - 3, o.sweep || o.half * 2, o.rev ? -e.sg : e.sg, o.col || '#f6f1e3', 0.17);
       G.sfx(o.sfx || 'swing2');
       return combat.strike(e, { k: 'arc', x: e.x, y, a: e.aa, half: o.half, r: o.r }, { dmg: o.dmg || 1, post: o.post || 28, pp: o.pp, kb: o.kb, unblock: o.unblock });
     },
     thrust(e, o) {
-      const y = e.y - e.def.hy, ca = Math.cos(e.aa), sa = Math.sin(e.aa);
+      const y = e.y - e.def.hy - (e.lift || 0), ca = Math.cos(e.aa), sa = Math.sin(e.aa);
       fx.line(e.x + ca * 8, y + sa * 8, e.x + ca * o.len, y + sa * o.len, o.col || '#f6f1e3', 0.16);
       G.sfx(o.sfx || 'thrust');
       return combat.strike(e, { k: 'box', x: e.x, y, a: e.aa, len: o.len, w: o.w || 10 }, { dmg: o.dmg || 1, post: o.post || 28, pp: o.pp, kb: o.kb, unblock: o.unblock });
@@ -142,6 +145,7 @@
     jump(e, tx, ty, d, h) {
       const a = this.arena;
       if (a) { tx = G.clamp(tx, a.x0 + 8, a.x1 - 8); ty = G.clamp(ty, a.y0 + 10, a.y1 - 4); }
+      for (let k = 0; k < 10 && G.world.boxBlocked(tx, ty, 10, 7); k++) { tx = G.lerp(tx, e.x, 0.12); ty = G.lerp(ty, e.y, 0.12); if (k === 9) { tx = e.x; ty = e.y; } }
       e.jp = { sx: e.x, sy: e.y, tx, ty, d, h, t: 0 }; e.inv = d - 0.04; G.sfx('leap'); fx.dust(e.x, e.y, 4);
     },
     jumpTick(e, dt) {
@@ -154,8 +158,9 @@
     shoot(e, kind, spd, o) { return E.shoot(e, kind, e.x + Math.cos(e.aa) * 10, e.y + Math.sin(e.aa) * 10, e.aa, spd, o); },
     // 포물선으로 던진다. 떨어질 자리가 붉게 보인다.
     lob(e, kind, tx, ty, d, o) {
-      const p = E.shoot(e, kind, e.x, e.y, 0, 0, Object.assign({ grav: 520, vz: 520 * d / 2, lx: tx, ly: ty, t: d + 1, unblock: true, rad: 16 }, o || {}));
-      p.vx = (tx - e.x) / d; p.vy = (ty - e.y) / d;
+      const f = (o && o.from) || [e.x, e.y];
+      const p = E.shoot(e, kind, f[0], f[1], 0, 0, Object.assign({ grav: 520, vz: 520 * d / 2, lx: tx, ly: ty, t: d + 1, unblock: true, rad: 16 }, o || {}));
+      p.vx = (tx - f[0]) / d; p.vy = (ty - f[1]) / d;
       return p;
     },
 
@@ -171,7 +176,9 @@
         this.run(e, [S.move(0.24, { on: en => this.jump(en, en.x + dx / l * 38, en.y + dy / l * 38, 0.24, 9) })]);
         return false;
       }
-      if (!open && !o.heavy && d.guard && (e.st === 'idle' || (d.guardTele && e.st === 'tele')) && Math.random() < d.guard) {
+      if (d.onStrike && d.onStrike(e, o) === false) return false;
+      const gd = e.guard !== undefined ? e.guard : d.guard;
+      if (!open && !o.heavy && gd && (e.st === 'idle' || (d.guardTele && e.st === 'tele')) && Math.random() < gd) {
         e.post += post * 0.55; e.blk = 0.22; e.lastHit = 0;
         if (!d.armor) { e.kbx = dx / l * 60; e.kby = dy / l * 60; }
         fx.spark(e.x - dx / l * 7, e.y - d.hy - dy / l * 7, 6); G.sfx('clang');
@@ -179,21 +186,25 @@
         if (e.post >= d.post) this.breakPosture(e);
         return false;
       }
-      let m = e.st === 'broken' ? 2 : open ? 1.5 : 1;
+      let m = e.st === 'broken' ? 2 : e.st === 'recoil' ? 1.5 : open ? 1.25 : 1;
       if (d.armor && !open) m *= 0.8;
       e.hp -= dmg * m; e.post += post * (e.st === 'broken' ? 0 : open ? 0.6 : 1); e.flash = 0.12; e.lastHit = 0;
       if (!d.armor || open) { e.kbx = dx / l * 70; e.kby = dy / l * 70; }
       fx.puff(e.x, e.y - d.cy, '#f6f1e3', 5, 70); G.sfx('hit'); fx.hitstop(o.heavy ? 0.08 : 0.04);
       if (m > 1) fx.text(e.x, e.y - d.cy - 14, e.st === 'broken' ? '급소' : '빈틈', '#e6cc78');
       if (e.hp <= 0) { this.win(e); return true; }
+      if (d.onHit) d.onHit(e, o);
       if (o.heavy && !d.armor && e.st === 'tele' && !e.jp) { e.seq = null; e.zone = null; e.st = 'recoil'; e.t = 0.35; }
       if (e.post >= d.post && e.st !== 'broken') this.breakPosture(e);
       if (e.phase === 1 && e.hp <= e.mhp * 0.5) { e.phase = 2; G.sfx('taiko'); fx.ring(e.x, e.y - 6, 30, '#e2714a', 0.4); if (d.onPhase) d.onPhase(e); }
       return true;
     },
+    // 수를 끊고 비틀거리게 한다
+    stagger(e, t) { e.seq = null; e.zone = null; e.jp = null; e.z = 0; e.hidden = false; e.st = 'recoil'; e.t = t; },
     breakPosture(e) {
-      e.seq = null; e.zone = null; e.jp = null; e.z = 0; e.inv = 0; e.st = 'broken'; e.t = e.def.brk || 2.3; e.post = e.def.post;
+      e.seq = null; e.zone = null; e.jp = null; e.z = 0; e.inv = 0; e.hidden = false; e.st = 'broken'; e.t = e.def.brk || 2.3; e.post = e.def.post;
       G.sfx('brk'); G.game.shake(4); fx.spark(e.x, e.y - e.def.cy, 12, '#e6cc78'); fx.slow(0.25, 0.4);
+      if (e.def.onBreak) e.def.onBreak(e);
       if (!G.s.flags.sawBrk) { G.s.flags.sawBrk = 1; G.ui.toast('맞수의 자세가 무너졌다. 지금이다.'); }
     },
     parried(e, pp) {
@@ -209,7 +220,8 @@
     },
     win(e) {
       this.state = 'won'; this.t = 0;
-      e.hp = 0; e.seq = null; e.zone = null; e.jp = null; e.z = 0; e.st = 'beaten'; e.kbx = e.kby = 0;
+      e.hp = 0; e.seq = null; e.zone = null; e.jp = null; e.z = 0; e.hidden = false; e.st = 'beaten'; e.kbx = e.kby = 0;
+      for (const o of E.list) if (o.type === 'fake') o.dead = true;
       fx.slow(1.0, 0.18); fx.hitstop(0.14); G.game.shake(5); G.sfx('cut'); fx.flash = 0.25;
       for (const o of E.list) if (o.type === 'proj') o.dead = true;
       G.music.play(null);
@@ -234,7 +246,7 @@
     draw(e, ctx, cx, cy, time) {
       const d = e.def, set = G.spr.f[d.spr], x = Math.round(e.x - cx), y = Math.round(e.y - cy);
       if (e.zone) fx.danger(ctx, Math.round(e.zone.x - cx), Math.round(e.zone.y - cy), e.zone.r, 0.5 + 0.5 * Math.sin(time * 22));
-      E.shadow(ctx, x, y - 1, d.big ? 22 : e.z > 8 ? 8 : 12);
+      if (!e.hidden) E.shadow(ctx, x, y - 1, d.big || e.sprSet ? 22 : e.z > 8 ? 8 : 12);
       const sp = e.sprSet ? G.spr.f[e.sprSet] : set;
       let img = sp[e.dir][e.mv ? Math.floor(e.anim * 6) % 2 : 0];
       let ox = 0, oy = 0;
@@ -244,12 +256,12 @@
       if (e.flash > 0 || (hot && e.tk === 'w' && Math.floor(time * 18) % 2)) img = G.art.white(img);
       else if (hot && e.tk === 'r' && Math.floor(time * 18) % 2) img = G.art.tint(img, '#e2714a');
       const dx = x - (img.width >> 1) + ox, dy = y - img.height + 1 + oy - Math.round(e.z);
-      const hx = x + (e.dir === 'r' ? d.hx : -d.hx) + ox, hy = y - d.hy - Math.round(e.z);
+      const hx = x + (e.dir === 'r' ? d.hx : -d.hx) + ox, hy = y - d.hy - (e.lift || 0) - Math.round(e.z);
       const quiet = e.st === 'wait' || e.st === 'friend' || e.st === 'stand' || e.st === 'beaten';
       let wa = e.wa;
       if (quiet) wa = d.restPose === undefined ? (e.dir === 'r' ? 1.2 : 1.94) : (e.dir === 'r' ? d.restPose : 3.1416 - d.restPose);
       if (e.st === 'broken') wa = e.dir === 'r' ? 2.0 : 1.14;
-      const showW = d.wpn && !(quiet && d.sheathed) && !e.noWpn;
+      const showW = (e.wpn || d.wpn) && !(quiet && d.sheathed) && !e.noWpn;
       const behind = showW && Math.sin(wa) < -0.2;
       const weapon = () => {
         if (!showW) return;
@@ -259,6 +271,7 @@
         if (d.wpn2 && !quiet) fx.blade(ctx, x - (e.dir === 'r' ? d.hx : -d.hx), hy, wa + (e.dir === 'r' ? -1.1 : 1.1), d.wpn2);
       };
       if (d.under) d.under(e, ctx, x, y, time);
+      if (e.hidden) return;
       if (behind) weapon();
       ctx.drawImage(img, dx, dy);
       if (!behind) weapon();
@@ -281,7 +294,7 @@
   // 느리고, 무겁고, 물러서지 않는다. 나기나타가 닿는 거리가 길다.
   duel.define('benkei', {
     name: '벤케이', full: '무사시보 벤케이', kanji: '武蔵坊弁慶', title: '다리를 지키는 자',
-    hp: 40, post: 130, spd: 30, r: 11, cy: 14, hx: 9, hy: 13, spr: 'benkei', wpn: 'nagi', big: true, armor: true, guard: 0.12, keep: 42, music: 'duel',
+    hp: 64, post: 130, spd: 30, r: 11, cy: 14, hx: 9, hy: 13, spr: 'benkei', wpn: 'nagi', big: true, armor: true, guard: 0.4, keep: 42, music: 'duel',
     ready: -1.0, restPose: -1.35, seesThrough: false,
     init(e) { e.cdM = 3; },
     pick(e, dist) {
@@ -348,7 +361,7 @@
   // 가볍고 빠르다. 베려 하면 물러나고, 쫓으면 건너뛴다.
   duel.define('yoshitsune', {
     name: '요시쓰네', full: '미나모토노 요시쓰네', kanji: '源義経', title: '여덟 척을 건너뛰는 자',
-    hp: 34, post: 85, spd: 84, r: 6, cy: 9, hx: 4, hy: 8, spr: 'yoshitsune', wpn: 'tachi', guard: 0.2, evade: 0.5, keep: 25, music: 'duel2', recoil: 0.7,
+    hp: 50, post: 85, spd: 84, r: 6, cy: 9, hx: 4, hy: 8, spr: 'yoshitsune', wpn: 'tachi', guard: 0.5, evade: 0.45, keep: 25, music: 'duel2', recoil: 0.7,
     init(e) { e.hops = 0; },
     boat(e, far) {
       // 건너뛸 배: 지금 선 배가 아니고, 맞수에게서 먼 쪽
