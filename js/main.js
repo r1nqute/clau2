@@ -446,7 +446,7 @@
       TX.drawS(ctx, opts[i], G.W / 2, y, sel ? '#f6f1e3' : '#8e8f8c', 'big', 1);
       if (sel) { const w = TX.width(opts[i]); ctx.fillStyle = '#e6cc78'; ctx.fillRect(G.W / 2 - w / 2 - 9, y + 6, 4, 2); ctx.fillRect(G.W / 2 + w / 2 + 5, y + 6, 4, 2); }
     }
-    TX.drawS(ctx, 'Z / X / Enter', G.W / 2, 196, '#8e8f8c', 'small', 1);
+    TX.drawS(ctx, G.touch ? '베기 단추를 누른다' : 'Z / X / Enter', G.W / 2, 196, '#8e8f8c', 'small', 1);
   }
 
   // ---------- 시작 ----------

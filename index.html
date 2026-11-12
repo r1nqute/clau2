@@ -103,6 +103,7 @@
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.getElementById('game').addEventListener('pointerdown', function () { G.audio.wake(); });
 
+  G.touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   function go() { var w = document.getElementById('wait'); if (w) w.remove(); G.main.start(); }
   var done = false, once = function () { if (!done) { done = true; go(); } };
   if (document.fonts && document.fonts.load) {

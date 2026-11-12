@@ -94,7 +94,7 @@
     const e = list[it.sel];
     const lines = TX.wrap(it.msg || (e ? e.desc : ''), 272, 'small');
     for (let i = 0; i < Math.min(2, lines.length); i++) TX.draw(ctx, lines[i], 56, 163 + i * 11, it.msg ? RED : PAPER, 'small');
-    TX.draw(ctx, '←→ 사기·팔기   Z 고르기   C 나가기', 56, 188, DIM, 'small');
+    TX.draw(ctx, G.touch ? '◀▶ 사기·팔기   베기: 고르기   비기: 나가기' : '←→ 사기·팔기   Z 고르기   C 나가기', 56, 188, DIM, 'small');
   }
 
   // ---------- 봇짐 ----------
@@ -163,7 +163,7 @@
         if (i === menu.sel) cursor(ctx, 31, y);
         TX.draw(ctx, d.name, 40, y, i === menu.sel ? LIGHT : PAPER);
         TX.draw(ctx, '' + s.inv[id], 150, y, GOLD, 'big', 2);
-        if (id === s.quick) TX.draw(ctx, 'V', 156, y + 2, RED, 'small');
+        if (id === s.quick) TX.draw(ctx, G.touch ? '쥠' : 'V', 154, y + 2, RED, 'small');
       }
       ctx.fillStyle = LINE; ctx.fillRect(172, 40, 1, 124);
       TX.draw(ctx, '찬 것', 182, 40, DIM, 'small');
@@ -179,7 +179,7 @@
         const d = G.ITEMS[list[menu.sel]];
         const lines = TX.wrap(d.desc, 320, 'small');
         for (let i = 0; i < Math.min(2, lines.length); i++) TX.draw(ctx, lines[i], 32, 171 + i * 10, PAPER, 'small');
-        TX.draw(ctx, d.heal || d.ki ? 'Z 먹는다   X 손에 쥔다(V로 먹는다)' : '', 32, 192, DIM, 'small');
+        TX.draw(ctx, d.heal || d.ki ? (G.touch ? '베기: 먹는다   막기: 손에 쥔다(먹기 단추로 먹는다)' : 'Z 먹는다   X 손에 쥔다(V로 먹는다)') : '', 32, 192, DIM, 'small');
       }
     } else if (menu.tab === 1) {
       // 비기
@@ -187,7 +187,7 @@
         const id = G.SKILL_ORDER[i], k = G.SKILLS[id], has = s.skills[id], y = 40 + i * 14;
         if (i === menu.sel) cursor(ctx, 31, y);
         TX.draw(ctx, has ? k.name : '？？？', 40, y, !has ? DIM : i === menu.sel ? LIGHT : PAPER);
-        if (has && id === s.skill) TX.draw(ctx, 'C', 112, y + 2, RED, 'small');
+        if (has && id === s.skill) TX.draw(ctx, G.touch ? '씀' : 'C', 110, y + 2, RED, 'small');
       }
       const id = G.SKILL_ORDER[menu.sel], k = G.SKILLS[id];
       ctx.fillStyle = LINE; ctx.fillRect(126, 40, 1, 72);
@@ -196,11 +196,13 @@
         TX.draw(ctx, k.from + '에게서 · 기 ' + k.cost + '칸', 348, 42, DIM, 'small', 2);
         const lines = TX.wrap(k.desc, 210, 'small');
         for (let i = 0; i < Math.min(4, lines.length); i++) TX.draw(ctx, lines[i], 136, 58 + i * 11, PAPER, 'small');
-        TX.draw(ctx, id === s.skill ? '지금 쓰는 비기' : 'Z 이 비기를 쓴다', 136, 102, id === s.skill ? GOLD : DIM, 'small');
+        TX.draw(ctx, id === s.skill ? '지금 쓰는 비기' : (G.touch ? '베기: 이 비기를 쓴다' : 'Z 이 비기를 쓴다'), 136, 102, id === s.skill ? GOLD : DIM, 'small');
       } else TX.draw(ctx, '아직 보지 못한 수.', 136, 42, DIM);
       rule(ctx, 28, 116, 328);
-      const rows = [['베기', 'Z · 이어 누르면 세 수'], ['발도', 'Z 꾹 눌렀다 뗀다'], ['막기', 'X 누르고 있는다'], ['쳐내기', '맞는 순간 X'],
-        ['되받아치기', '쳐낸 직후 Z'], ['보법', 'Space · 뒤이어 Z로 달려 베기'], ['비기', 'C · 바꾸기 Q'], ['먹기', 'V']];
+      const rows = G.touch ? [['베기', '이어 누르면 세 수'], ['발도', '베기를 꾹 눌렀다 뗀다'], ['막기', '누르고 있는다'], ['쳐내기', '맞는 순간 막기'],
+        ['되받아치기', '쳐낸 직후 베기'], ['보법', '뒤이어 베기로 달려 베기'], ['비기', '바꾸기는 바꿈 단추'], ['먹기', '쥔 것을 먹는다']]
+        : [['베기', 'Z · 이어 누르면 세 수'], ['발도', 'Z 꾹 눌렀다 뗀다'], ['막기', 'X 누르고 있는다'], ['쳐내기', '맞는 순간 X'],
+          ['되받아치기', '쳐낸 직후 Z'], ['보법', 'Space · 뒤이어 Z로 달려 베기'], ['비기', 'C · 바꾸기 Q'], ['먹기', 'V']];
       for (let i = 0; i < rows.length; i++) {
         const cx = i < 4 ? 32 : 196, y = 121 + (i % 4) * 12;
         TX.draw(ctx, rows[i][0], cx, y, GOLD, 'small'); TX.draw(ctx, rows[i][1], cx + 52, y, PAPER, 'small');
@@ -445,13 +447,13 @@
       if (s.quick && s.inv[s.quick] > 0) {
         const t = G.ITEMS[s.quick].name + ' ' + s.inv[s.quick], w = TX.width(t, 'small') + 20;
         ctx.fillStyle = 'rgba(27,26,31,0.75)'; ctx.fillRect(G.W - w - 4, ry, w, 13);
-        TX.draw(ctx, 'V', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, t, G.W - 8, ry + 1, LIGHT, 'small', 2);
+        TX.draw(ctx, G.touch ? '먹' : 'V', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, t, G.W - 8, ry + 1, LIGHT, 'small', 2);
         ry -= 15;
       }
       if (s.skill && s.skills[s.skill]) {
         const k = G.SKILLS[s.skill], w = TX.width(k.name, 'small') + 20, ok = s.ki >= k.cost;
         ctx.fillStyle = 'rgba(27,26,31,0.75)'; ctx.fillRect(G.W - w - 4, ry, w, 13);
-        TX.draw(ctx, 'C', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, k.name, G.W - 8, ry + 1, ok ? LIGHT : DIM, 'small', 2);
+        TX.draw(ctx, G.touch ? '비' : 'C', G.W - w, ry + 1, RED, 'small'); TX.draw(ctx, k.name, G.W - 8, ry + 1, ok ? LIGHT : DIM, 'small', 2);
       }
       let y = G.H - 18;
       for (let i = toasts.length - 1; i >= 0; i--) {

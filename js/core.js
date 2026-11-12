@@ -79,6 +79,11 @@
       for (const k in released) delete released[k];
     }
   };
+  // 손가락으로 할 때는 글쇠 이름 대신 단추 이름을 일러 준다
+  G.touch = false;
+  const KEYNAME = { a: 'Z', b: 'X', c: 'C', d: 'Space', e: 'V', q: 'Q', menu: 'Esc' };
+  const BTN = { a: '베기', b: '막기', c: '비기', d: '보법', e: '먹기', q: '바꿈', menu: '봇짐' };
+  G.key = a => (G.touch ? BTN : KEYNAME)[a];
   window.addEventListener('keydown', e => {
     const a = KEYS[e.code];
     if (!a) return;

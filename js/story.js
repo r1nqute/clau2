@@ -17,7 +17,7 @@
     learn(id) {
       const s = G.s, k = G.SKILLS[id];
       s.skills[id] = 1; s.skill = id; s.ki = s.maxki;
-      G.sfx('learn'); G.ui.toast('비기를 얻었다: ' + k.name + ' (C)');
+      G.sfx('learn'); G.ui.toast('비기를 얻었다: ' + k.name + ' (' + G.key('c') + ')');
     },
     grow() { const s = G.s; s.maxhp++; s.hp = s.maxhp; G.ui.toast('감이 하나 늘었다'); },
     openGate(i) {
@@ -37,7 +37,7 @@
       me(['배가 닿았다. 바다에 붉은 깃발이 떠 있다.', '큰 싸움이 막 끝난 모양이다.']);
       G.ui.run(() => {
         G.ui.era(G.world.cur.title);
-        G.ui.toast('Z 베기   X 막기·말 걸기   Space 보법   Esc 봇짐');
+        G.ui.toast(G.touch ? '원판으로 걷는다. 막기 단추로 말도 건다.' : 'Z 베기   X 막기·말 걸기   Space 보법   Esc 봇짐');
       });
     },
     onEnter(id) { const m = maps[id]; if (m && m.enter) m.enter(G.s); },
