@@ -214,7 +214,7 @@
       const living = !f.boss && !f.d.ghost && !f.d.straw;
       if (living && !f.yielding && dmg >= f.hp) dmg = f.hp - 1;
       f.hp -= dmg; f.flash = 0.18; f.post += post;
-      this.pop(f.x, f.y - (f.big ? 34 : 24), '' + dmg, f.broken ? GOLD : LIGHT);
+      this.pop(f.x + f.ox, f.y + f.oy - (f.big ? 34 : 24), '' + dmg, f.broken ? GOLD : LIGHT);
       fx.puff(f.x, f.y - 9, f.d.ghost ? '#b9d2cc' : LIGHT, 4, 40); G.sfx('hit'); G.game.shake(o.heavy ? 3 : 1.5);
       if (o.basic) s.ki = Math.min(s.maxki, s.ki + 0.5);
       if (f.boss && f.hp <= 0) { f.hp = 0; this.over = 'win'; f.beaten = true; G.sfx('cut'); fx.flash = 0.2; return; }
@@ -364,6 +364,8 @@
     pop(x, y, str, col) { this.pops.push({ x: x * 2, y: y * 2, str, col, t: 0 }); },
 
     // ---------- 한 틱 ----------
+    // 화면을 눌렀다(게임 좌표)
+    press(x, y) { if (this.active) this.tap = { x, y }; },
     update(dt) {
       const I = G.input, s = G.s;
       this.t += dt;
@@ -375,7 +377,8 @@
         const c = this.cur, k = (I.down('a') || I.down('b')) && !c.hold ? 2.4 : 1;
         c.t += dt * k;
         if (c.tick) c.tick(Math.min(1, c.t / c.d));
-        if (c.t >= c.d && (!c.hold || c.t > c.d + 2.5 || I.ok())) this.cur = null;
+        if (c.t >= c.d && (!c.hold || c.t > c.d + 2.5 || I.ok() || this.tap)) this.cur = null;
+        this.tap = null;
         return;
       }
       if (this.q.length) {
@@ -391,7 +394,21 @@
       const move = (n, cols) => {
         if (I.hit('up')) return -cols; if (I.hit('down')) return cols; if (I.hit('left')) return -1; if (I.hit('right')) return 1; return 0;
       };
-      const ok = I.hit('a') || I.hit('b'), back = I.hit('c') || I.hit('d') || I.hit('menu');
+      let ok = I.hit('a') || I.hit('b'), back = I.hit('c') || I.hit('d') || I.hit('menu');
+      // 손가락으로 누른 자리
+      const tp = this.tap; this.tap = null;
+      if (tp) {
+        const row = Math.floor((tp.y - 152) / 14);
+        if (this.sub === 'target') {
+          const L = this.targets();
+          let bi = -1, bd = 60;
+          L.forEach((f, i) => { const d = Math.hypot(tp.x - f.x * 2, tp.y - (f.y * 2 - this.sprite(f).height)); if (d < bd) { bd = d; bi = i; } });
+          if (bi >= 0) { this.tsel = bi; ok = true; } else back = true;
+        } else if (tp.x < 184 && tp.y > 150 && row >= 0 && row < 4) {
+          if (!this.sub) { this.sel = row * 2 + (tp.x > 92 ? 1 : 0); ok = true; }
+          else { const list = this.sub === 'art' ? this.arts() : this.items(), top = G.clamp(this.ssel - 3, 0, Math.max(0, list.length - 4)); if (top + row < list.length) { this.ssel = top + row; ok = true; } }
+        } else if (this.sub) back = true;
+      }
       if (this.sub === 'target') {
         const L = this.targets(), d = move(L.length, 1);
         if (d) { this.tsel = (this.tsel + (d > 0 ? 1 : -1) + L.length) % L.length; G.sfx('move'); }
@@ -454,7 +471,7 @@
     draw(ctx, time) {
       const s = G.s, H = this.H, S = G.spr;
       ctx.drawImage(this.bg, 0, 0);
-      ctx.fillStyle = 'rgba(12,11,15,0.34)'; ctx.fillRect(0, 0, G.W, G.H);
+      ctx.fillStyle = 'rgba(12,11,15,0.42)'; ctx.fillRect(0, 0, G.W, G.H);
       ctx.fillStyle = 'rgba(232,226,208,0.07)'; ctx.fillRect(0, 84, G.W, 62);
       ctx.fillStyle = 'rgba(12,11,15,0.25)'; ctx.fillRect(0, 84, G.W, 1); ctx.fillRect(0, 146, G.W, 1);
       // 싸움판: 두 배
@@ -508,7 +525,7 @@
       // 기색과 몸 줄
       const L = this.live();
       for (const f of L) {
-        const x = Math.round((f.x + f.ox) * 2), y = Math.round((f.y + f.oy) * 2), top = y - this.sprite(f).height * 2 - (f.d.fly ? 24 : 9);
+        const x = Math.round((f.x + f.ox) * 2), y = Math.round((f.y + f.oy) * 2), top = Math.max((this.topH || 30) + 7, y - this.sprite(f).height * 2 - (f.d.fly ? 24 : 9));
         if (!f.boss && !f.fake) {
           ctx.fillStyle = INK; ctx.fillRect(x - 13, y + 5, 26, 4);
           ctx.fillStyle = f.yielding ? '#7fa9b0' : RED; ctx.fillRect(x - 12, y + 6, Math.max(0, Math.round(24 * f.hp / f.mhp)), 2);
@@ -548,18 +565,19 @@
           else { t = mv.tell; const k = mv.show || mv.k; col = k === 'r' ? HOT : k === 'w' ? LIGHT : k === 'n' ? '#b8d48a' : GOLD; }
           for (const ln of TX.wrap((L.length > 1 || this.hasFakes() ? f.name + ' — ' : '') + t, 366, 'small')) lines.push([ln, col]);
         }
-        const h = lines.length * 11 + 19;
+        const legend = lines.length <= 2, h = lines.length * 11 + (legend ? 19 : 8);
+        this.topH = h + 3;
         P(ctx, 4, 3, 376, h);
         lines.forEach((l, i) => TX.draw(ctx, l[0], 10, 6 + i * 11, l[1], 'small'));
-        TX.draw(ctx, '흰 수: 쳐내기·막기    붉은 수: 비키기    틈: 베기', 10, h - 9, DIM, 'small');
+        if (legend) TX.draw(ctx, '흰 수: 쳐내기·막기    붉은 수: 비키기    틈: 베기', 10, h - 9, DIM, 'small');
       }
       if (b) {
-        const w = 150, x = (G.W - w) / 2, y = this.state === 'cmd' ? 50 : 14;
-        TX.drawS(ctx, G.duel.DEFS[b.kind].kanji + '  ' + b.name, G.W / 2, y - 13, LIGHT, 'small', 1);
+        const w = 140, x = 372 - w, y = this.state === 'cmd' ? (this.topH || 30) + 18 : 18, mid = x + w / 2;
+        TX.drawS(ctx, G.duel.DEFS[b.kind].kanji + '  ' + b.name, 372, y - 13, LIGHT, 'small', 2);
         ctx.fillStyle = INK; ctx.fillRect(x - 1, y - 1, w + 2, 6); ctx.fillStyle = '#7a2a24'; ctx.fillRect(x, y, w, 4);
         ctx.fillStyle = RED; ctx.fillRect(x, y, Math.max(0, Math.round(w * b.hp / b.mhp)), 4);
         const pf = b.broken ? 1 : Math.min(1, b.post / b.mpost), half = Math.round(50 * pf);
-        ctx.fillStyle = INK; ctx.fillRect(G.W / 2 - 51, y + 6, 102, 4); ctx.fillStyle = b.broken ? LIGHT : GOLD; ctx.fillRect(G.W / 2 - half, y + 7, half * 2, 2);
+        ctx.fillStyle = INK; ctx.fillRect(mid - 51, y + 6, 102, 4); ctx.fillStyle = b.broken ? LIGHT : GOLD; ctx.fillRect(mid - half, y + 7, half * 2, 2);
       }
       // 아래 왼쪽: 고를 것 또는 벌어지는 일
       P(ctx, 4, 150, 178, 62);
@@ -598,19 +616,19 @@
       ctx.fillStyle = INK; ctx.fillRect(205, 172, 92, 8); ctx.fillStyle = '#33303a'; ctx.fillRect(206, 173, 90, 6);
       ctx.fillStyle = s.hp <= s.maxhp * 0.3 ? RED : '#b8d48a'; ctx.fillRect(206, 173, Math.max(0, Math.round(90 * s.hp / s.maxhp)), 6);
       TX.draw(ctx, Math.max(0, s.hp) + '/' + s.maxhp, 372, 169, LIGHT, 'big', 2);
-      G.ui.kiPips(ctx, 194, 186);
+      G.ui.kiPips(ctx, 200 + TX.width('고려 검객'), 157);
       const st = this.state === 'run' ? this.H.stance : null;
       const tag = (this.decoy > 0 ? '허수 ' + this.decoy + '  ' : '') + (st ? { parry: '쳐내기', guard: '막기', evade: '비키기' }[st] : '') + (this.H.stunned ? '숨 막힘' : '');
-      if (tag) TX.draw(ctx, tag, 372, 185, GOLD, 'small', 2);
+      if (tag) TX.draw(ctx, tag, 372, 196, GOLD, 'small', 2);
       if (this.state === 'cmd' && this.sub === 'art') {
         const a = G.ARTS[this.arts()[this.ssel]];
-        if (a) TX.wrap(a.desc, 180, 'small').slice(0, 2).forEach((ln, i) => TX.draw(ctx, ln, 194, 197 - (TX.wrap(a.desc, 180, 'small').length > 1 ? 4 : 0) + i * 10, PAPER, 'small'));
+        if (a) TX.wrap(a.desc, 180, 'small').slice(0, 2).forEach((ln, i) => TX.draw(ctx, ln, 194, 190 - (TX.wrap(a.desc, 180, 'small').length > 1 ? 4 : 0) + i * 10, PAPER, 'small'));
       } else if (this.state === 'cmd' && this.sub === 'item') {
         const d = G.ITEMS[this.items()[this.ssel]];
-        if (d) TX.draw(ctx, d.ki ? '기가 찬다' : '체력 +' + d.heal, 194, 198, PAPER, 'small');
+        if (d) TX.draw(ctx, d.ki ? '기가 찬다' : '체력 +' + d.heal, 194, 192, PAPER, 'small');
       } else if (this.state === 'cmd' && !this.sub) {
         const tip = ['한 칼 벤다. 기가 조금 찬다.', '기를 써서 크게 벤다.', '흰 수 하나를 쳐내고 되받아친다.', '붉은 수를 비킨다. 기가 찬다.', '무엇이든 덜 아프게 받는다.', '먹거나 마신다.', '기가 꺾인 것을 보내 준다.', '싸움에서 물러난다.'][this.sel];
-        TX.draw(ctx, this.sel === 7 && b ? '승부에서 등을 보일 수는 없다.' : tip, 194, 198, DIM, 'small');
+        TX.draw(ctx, this.sel === 7 && b ? '승부에서 등을 보일 수는 없다.' : tip, 194, 192, DIM, 'small');
       }
     }
   };

@@ -272,12 +272,13 @@
     // 싸움으로 넘어가는 사이
     if (state === 'battleIn') {
       transT += DT;
-      if (transT >= 0.7) { state = 'battle'; G.battle.start(pending); }
+      if (transT >= 0.7) { state = 'battle'; G.battle.start(pending); document.body.classList.add('inbattle'); }
       return;
     }
     if (state === 'battle') {
       G.ui.update(DT);
       G.battle.update(DT);
+      if (!G.battle.active) document.body.classList.remove('inbattle');
       if (!G.battle.active && state === 'battle') { state = 'play'; fade.a = 1; fade.dir = -1; }
       return;
     }
@@ -434,8 +435,8 @@
     drawList.length = 0;
     for (const pr of vis) { if (pr.flat) drawProp(pr, cx, cy); else drawList.push(pr); }
     fx.drawUnder(ctx, cx, cy);
-    for (const e of G.E.list) if (e.x > cx - 50 && e.x < cx + G.W + 50 && e.y > cy - 30 && e.y < cy + G.H + 90) drawList.push(e);
-    if (state !== 'title') drawList.push(G.p);
+    if (!noHud) for (const e of G.E.list) if (e.x > cx - 50 && e.x < cx + G.W + 50 && e.y > cy - 30 && e.y < cy + G.H + 90) drawList.push(e);
+    if (state !== 'title' && !noHud) drawList.push(G.p);
     drawList.sort((a, b) => a.y - b.y);
     for (const o of drawList) {
       if (o === G.p) {
@@ -557,6 +558,7 @@
       tick(n) { for (let i = 0; i < n; i++) { update(); G.input.endFrame(); } render(); },
       cam() { return [camx, camy]; },
       forceBattle() { state = 'battle'; },
+      setState(v) { state = v; },
       ticks(n) { for (let i = 0; i < n; i++) { update(); G.input.endFrame(); } }
     }
   };

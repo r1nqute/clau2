@@ -33,6 +33,8 @@
   @media (pointer: coarse) {
     #touch { display: block; }
   }
+  /* 싸움 중에는 명령을 화면에서 바로 누른다. 원판은 치운다. */
+  body.inbattle .tb { display: none; }
   @media (pointer: coarse) and (orientation: portrait) {
     #stage { align-items: flex-start; }
     #bM { top: auto; bottom: calc(214px + env(safe-area-inset-bottom, 0px)); }
@@ -101,7 +103,13 @@
     b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
   });
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  document.getElementById('game').addEventListener('pointerdown', function () { G.audio.wake(); });
+  var cvs = document.getElementById('game');
+  cvs.addEventListener('pointerdown', function (e) {
+    G.audio.wake();
+    if (!G.battle || !G.battle.active) return;
+    var r = cvs.getBoundingClientRect();
+    G.battle.press((e.clientX - r.left) / r.width * G.W, (e.clientY - r.top) / r.height * G.H);
+  });
 
   G.touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   function go() { var w = document.getElementById('wait'); if (w) w.remove(); G.main.start(); }
