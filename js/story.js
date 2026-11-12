@@ -49,6 +49,7 @@
       const b = bosses[id], s = G.s;
       s.flags[id] = 1; ST.seen(id, 2);
       if (b && b.won) b.won(e, s);
+      for (const a of G.party.active()) { const l = G.ALLY_WON[id] && G.ALLY_WON[id][a]; if (l) say(G.ALLIES[a].name, l); }
       G.ui.run(() => { G.music.play(G.world.cur.music); G.game.save(); });
     },
     use(pr) { const m = maps[G.s.map]; if (m && m.use) m.use(pr, G.s); }
@@ -209,6 +210,16 @@
           me('칼 잃은 사람 마음은 안다. 임금 잃은 마음은 모른다.');
           return;
         }
+        if (!G.party.has('iso') && (f.crabQ === 2 || f.benkei)) {
+          say('해녀', f.isoAsk ? '마음이 바뀌었어요? 나는 아직 그대로예요.' : ['또 왔네요. 갓 쓴 사람.', '숨이 닿는 데까지는 다 봤어요. 칼은 없어요.', '……물속에 없으면 물 밖 어딘가에 있겠죠. 데려가 줘요. 사람 많은 데를 돌다 보면 칼 소문 하나쯤은 들리겠죠.', '이소예요. 갯바위 이소. 숨은 길고 말은 짧아요.']);
+          f.isoAsk = 1;
+          G.ui.choice(['같이 가자고 한다', '아직은'], i => {
+            if (i !== 0) { say('이소', '그럼 물에 좀 더 있을게요.'); return; }
+            say('이소', ['빗창하고 망사리만 챙길게요.', '아, 그리고 갓은 물에 안 뜨더라도 괜찮아요. 내가 건져 줄게요.']);
+            G.ui.run(() => G.party.join('iso'));
+          });
+          return;
+        }
         say('해녀', f.shell ? '바다는 준 만큼 도로 가져가요. 가져간 만큼 도로 주고요.' : '숨이 닿는 데까지는 다 봤어요. 그 밑은 몰라요.');
       }
     },
@@ -290,6 +301,10 @@
       say('요시쓰네', ['더 센 자를 찾는다면 나는 모르오. 내 스승이라면 알 거요.', '구라마 산의 덴구. 사람이 아니라서 때를 가리지 않소. 이 깃털을 쥐고 언덕 위 돌 도리이를 지나 보시오.', '아, 뛰는 법은 보셨으니 가져가시오. 숨길 것도 못 되오.']);
       G.ui.run(() => { G.game.give('feather', 1); s.flags.feather = 1; s.flags.gate0 = 1; ST.learn('leap'); ST.grow(); });
       say('요시쓰네', '형님께는 말하지 마시오. 내가 졌다는 것 말이오. 요즘 형님은 내 좋은 소식도 달가워하지 않으시니.');
+      if (G.party.has('iso') && !s.flags.shell) {
+        say('이소', ['……판관님 배 밑에서 이게 걸려 올라왔어요. 칼은 아니고요.', '칼 찾는 사람 마음을 안다고 했죠. 가져요.']);
+        G.ui.run(() => { s.flags.shell = 1; G.game.give('shell', 1); ST.grow(); });
+      }
     }
   });
 

@@ -211,6 +211,7 @@
   const flips = new Map();
   function flipped(img) { let f = flips.get(img); if (!f) flips.set(img, f = G.art.flip(img)); return f; }
   E.draw = function (e, ctx, cx, cy, time) {
+    if (e.type === 'follower') { G.followers.draw(e, ctx, cx, cy, time); return; }
     const S = G.spr, x = Math.round(e.x - cx), y = Math.round(e.y - cy);
     if (e.type === 'npc') {
       let img = S.npc[e.spr] || (S.f[e.spr] && S.f[e.spr].r[0]);

@@ -45,6 +45,7 @@
     K.house('chaya', 8, 20, { ground: T.HIGH, doorT: T.DIRT });
     K.prop('bench', 13, 22, { x: 14 * 16, y: 22 * 16 + 14 }); K.block(13, 22, 2, 1, 2); K.reserve(12, 21, 4, 3);
     K.npc('granny', 10, 22);
+    K.npc('asaHub', 16, 23, { spr: 'asahina', face: 'l', when: s => s.flags.kusunoki && !(s.allies && s.allies.asahina) });
     K.put('taru', 7, 22, {}, true);
     // 신목과 덴구
     K.prop('goshinboku', 41, 16, { x: 41 * 16 + 8, y: 16 * 16 + 15 }); K.block(41, 16); K.reserve(39, 13, 5, 5);
@@ -131,7 +132,7 @@
     K.path([[14, 51], [17, 46], [21, 43]], 2, T.DIRT, 1);
     K.prop('rowboat', 11, coast(11) + 1, { use: 'story', id: 'myboat', reach: 6 }); K.block(10, coast(11) + 1, 2, 1, 2);
     K.prop('boat', 24, coast(24), { x: 24 * 16 }); K.block(23, coast(24), 2, 1, 2);
-    K.npc('fisher', 31, 49); K.npc('ama', 38, coast(38) - 1); K.npc('kid', 20, 46); K.npc('monk', 46, coast(46) - 1);
+    K.npc('fisher', 31, 49); K.npc('ama', 38, coast(38) - 1, { when: s => !(s.allies && s.allies.iso) }); K.npc('kid', 20, 46); K.npc('monk', 46, coast(46) - 1);
     m.safe.push([21, 41, 12]);
 
     // --- 버려진 헤이케 진터

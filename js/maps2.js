@@ -70,7 +70,7 @@
     m.safe.push([52, 45, 14]);
     // 서쪽: 밭, 사당, 늙은 비구니
     K.rect(10, 36, 7, 3, T.FIELD); K.rect(19, 36, 6, 3, T.FIELD); K.rect(10, 40, 6, 3, T.FIELD);
-    K.put('hokora', 14, 28, {}); K.npc('tomoe', 16, 30);
+    K.put('hokora', 14, 28, {}); K.npc('tomoe', 16, 30, { when: s => !(s.allies && s.allies.tomoe) });
     K.put('kakashi', 13, 37);
     // 바닷가와 고쓰보 갯가
     homeGate(K, 30, 55, 1, { s: 'toriiStone' });

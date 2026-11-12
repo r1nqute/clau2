@@ -12,7 +12,7 @@
     const st = G.world.get('dan').start;
     return {
       hp: 40, maxhp: 40, lv: 1, exp: 0, ki: 0, maxki: 3, money: 15, inv: { gotgam: 3, rice: 2 }, quick: 'gotgam', wlv: 0, skills: {}, skill: null,
-      flags: {}, seen: {}, time: 6.5 * 60, day: 1, map: 'dan', x: st.x, y: st.y,
+      flags: {}, seen: {}, allies: {}, party: [], time: 6.5 * 60, day: 1, map: 'dan', x: st.x, y: st.y,
       respawn: { map: 'dan', x: st.x, y: st.y }, kills: 0, spared: 0, deaths: 0, parries: 0
     };
   }
@@ -68,7 +68,7 @@
       setTimeout(() => {
         fade.dir = 1; fade.cb = () => {
           const lost = inDuel ? 0 : Math.floor(s.money * 0.1);
-          s.money -= lost; s.hp = s.maxhp; s.ki = Math.max(s.ki, 1); G.p.st = 'idle';
+          s.money -= lost; s.hp = s.maxhp; s.ki = Math.max(s.ki, 1); G.p.st = 'idle'; G.party.healAll();
           enter(s.respawn.map, s.respawn.x, s.respawn.y, 'down');
           state = 'play';
           G.ui.say('', inDuel ? ['정신을 차려 보니 지장 앞이다.', '졌다. 목은 붙어 있다. 저쪽도 한 치 앞에서 멈춘 모양이다.']
@@ -177,11 +177,16 @@
         const night = this.isNight(), fixed = G.world.cur.hour !== undefined;
         G.ui.say('', f.sawJizo ? '지장이다. 붉은 턱받이가 바람에 들린다.' : ['돌로 깎은 지장이 서 있다. 붉은 턱받이를 둘렀다.', '고향의 장승보다 순하게 생겼다. 마음이 놓이는 것은 같다.']);
         f.sawJizo = 1;
-        G.ui.choice(['여기까지 새긴다', fixed ? '숨을 고른다' : night ? '날이 샐 때까지 쉰다' : '해가 질 때까지 쉰다', '그만둔다'], i => {
+        const talk = G.camp.next();
+        const opts = ['여기까지 새긴다', fixed ? '숨을 고른다' : night ? '날이 샐 때까지 쉰다' : '해가 질 때까지 쉰다'];
+        if (talk) opts.push(G.josa(G.ALLIES[talk.id].name, '과', '와') + ' 불가에 앉는다');
+        opts.push('그만둔다');
+        G.ui.choice(opts, i => {
+          if (talk && i === 2) { G.camp.play(); return; }
           if (i === 0) { s.respawn = { map: s.map, x: pr.x, y: pr.y + 12 }; this.save(); G.sfx('save'); G.ui.toast('새겼다.'); }
           else if (i === 1) fadeTo(() => {
             if (!fixed) { if (night) { if (s.time > 6 * 60) s.day++; s.time = 6 * 60; } else s.time = 20 * 60 + 5; }
-            s.hp = s.maxhp; s.ki = s.maxki;
+            s.hp = s.maxhp; s.ki = s.maxki; G.party.healAll();
             s.respawn = { map: s.map, x: pr.x, y: pr.y + 12 }; this.save();
             p.st = 'sit';
             G.ui.toast(fixed ? '숨을 골랐다.' : night ? '날이 밝았다.' : '해가 졌다.');
@@ -199,7 +204,7 @@
       fadeTo(() => {
         const s = G.s;
         if (s.time > 6 * 60) s.day++;
-        s.time = 6 * 60; s.hp = s.maxhp; s.ki = s.maxki;
+        s.time = 6 * 60; s.hp = s.maxhp; s.ki = s.maxki; G.party.healAll();
         s.respawn = { map: s.map, x: G.p.x, y: G.p.y };
         this.save(); G.sfx('save');
         G.ui.toast('잘 쉬었다. 새겼다.');
@@ -226,7 +231,9 @@
     if (o && o.spot && m[o.spot]) { x = m[o.spot].x; y = m[o.spot].y; }
     G.E.reset(); G.duel.clear(); fx.reset(); G.STORY.resetAsked();
     G.p.reset(x, y, dir);
+    G.followers.reset();
     G.STORY.onEnter(map);
+    G.followers.arrive(map);
     lastRegion = ''; target = null;
     snapCam();
     fx.weather.set(m.weather, camx, camy);
@@ -301,6 +308,7 @@
       if (s.time >= 1440) { s.time -= 1440; s.day++; }
     }
     p.update(dt, DT);
+    G.followers.update(dt);
     G.STORY.tick(dt);
     G.duel.update(dt, DT);
     G.E.spawner();
@@ -347,7 +355,7 @@
     const saved = cont ? G.store.read() : null;
     G.s = saved || fresh();
     const s = G.s;
-    s.flags = s.flags || {}; s.seen = s.seen || {}; s.skills = s.skills || {}; s.inv = s.inv || {};
+    s.flags = s.flags || {}; s.seen = s.seen || {}; s.skills = s.skills || {}; s.inv = s.inv || {}; s.allies = s.allies || {}; s.party = s.party || [];
     // 차례 싸움 이전의 기록이면 체력을 새 셈으로 옮긴다
     if (!s.lv) { s.lv = 1 + Object.keys(s.skills).length * 2; s.exp = 0; s.maxhp = 40 + Math.max(0, s.maxhp - 5) * 10 + (s.lv - 1) * 5; s.hp = s.maxhp; }
     if (!G.world.has(s.map)) { s.map = 'hub'; s.x = G.HUB.gx(0); s.y = G.HUB.gy; }
@@ -436,7 +444,7 @@
     for (const pr of vis) { if (pr.flat) drawProp(pr, cx, cy); else drawList.push(pr); }
     fx.drawUnder(ctx, cx, cy);
     if (!noHud) for (const e of G.E.list) if (e.x > cx - 50 && e.x < cx + G.W + 50 && e.y > cy - 30 && e.y < cy + G.H + 90) drawList.push(e);
-    if (state !== 'title' && !noHud) drawList.push(G.p);
+    if (state !== 'title' && !noHud) { drawList.push(G.p); for (const f of G.followers.list) drawList.push(f); }
     drawList.sort((a, b) => a.y - b.y);
     for (const o of drawList) {
       if (o === G.p) {
@@ -446,6 +454,7 @@
       else drawProp(o, cx, cy);
     }
     fx.draw(ctx, cx, cy);
+    if (!noHud && state === 'play' && !G.ui.busy()) G.followers.drawBubbles(ctx, cx, cy);
 
     // 살필 수 있는 것 위에 작은 표시
     if (target && !target.quiet) {

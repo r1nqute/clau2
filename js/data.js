@@ -110,6 +110,11 @@
       fact: '요리토모의 아우. 이치노타니, 야시마, 단노우라에서 잇달아 이겨 헤이케를 무너뜨렸다. 그 뒤 형에게 쫓겨 오슈 히라이즈미에서 죽었다.',
       lore: '구라마 산에서 덴구에게 배웠다는 것은 전설. 단노우라에서 적장을 피해 옆 배로 뛰었다는 이야기는 『헤이케 이야기』에 있고, 뒷날 "여덟 척"으로 불어났다.'
     },
+    iso: {
+      name: '해녀 이소', kanji: '磯', years: '지어낸 사람',
+      fact: '이 이야기에서 지어낸 사람이다. 다만 단노우라 싸움(1185)에서 여덟 살 안토쿠 천황이 외할머니 니이노아마에게 안겨 물에 들었고, 세 가지 신기 가운데 칼(구사나기)이 함께 가라앉아 끝내 건지지 못했다는 것은 『헤이케 이야기』와 『아즈마카가미』에 적혀 있다.',
+      lore: '물에 든 것은 본디 칼이 아니라 가타시로(대신 쓰던 칼)이고, 진짜는 아쓰타 신궁에 그대로 있다는 이야기가 전한다.'
+    },
     tomoe: {
       name: '도모에 고젠', kanji: '巴御前', years: '생몰년 모름',
       fact: '기소 요시나카를 따라 싸운 여무사. 『헤이케 이야기』에 "한 사람이 천을 당하는 무사"라고 나온다. 아와즈 싸움(1184) 뒤의 일은 알 수 없다.',
@@ -156,5 +161,5 @@
       lore: '이름이 전하는 이는 몇 되지 않는다.'
     }
   };
-  G.PEOPLE_ORDER = ['tengu', 'benkei', 'yoshitsune', 'tomoe', 'asahina', 'kusunoki', 'bokuden', 'kenshin', 'shingen', 'kojiro', 'musashi', 'potters'];
+  G.PEOPLE_ORDER = ['tengu', 'iso', 'benkei', 'yoshitsune', 'tomoe', 'asahina', 'kusunoki', 'bokuden', 'kenshin', 'shingen', 'kojiro', 'musashi', 'potters'];
 })();

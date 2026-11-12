@@ -98,7 +98,7 @@
   }
 
   // ---------- 봇짐 ----------
-  const TABS = ['봇짐', '검술', '인물록', '할 일', '지도'];
+  const TABS = ['봇짐', '검술', '인물록', '할 일', '지도', '동료'];
   const menu = { open: false, tab: 0, sel: 0, minis: {} };
   function invList() {
     const s = G.s, out = [];
@@ -113,10 +113,15 @@
     if (I.back() || I.hit('map')) { menu.open = false; G.sfx('move'); return; }
     if (I.hit('left')) { menu.tab = (menu.tab + TABS.length - 1) % TABS.length; menu.sel = 0; G.sfx('move'); }
     if (I.hit('right')) { menu.tab = (menu.tab + 1) % TABS.length; menu.sel = 0; G.sfx('move'); }
-    const list = menu.tab === 0 ? invList() : menu.tab === 1 ? G.ART_ORDER : menu.tab === 2 ? seenList() : [];
+    const list = menu.tab === 0 ? invList() : menu.tab === 1 ? G.ART_ORDER : menu.tab === 2 ? seenList() : menu.tab === 5 ? G.party.recruited() : [];
     if (I.hit('up') && list.length) { menu.sel = (menu.sel + list.length - 1) % list.length; G.sfx('move'); }
     if (I.hit('down') && list.length) { menu.sel = (menu.sel + 1) % list.length; G.sfx('move'); }
     menu.sel = G.clamp(menu.sel, 0, Math.max(0, list.length - 1));
+    if (menu.tab === 5 && list.length && (I.hit('a') || I.hit('b'))) {
+      const id = list[menu.sel];
+      if (G.party.toggle(id)) G.sfx('ok');
+      else { G.sfx('deny'); G.ui.toast('함께 걷는 것은 둘까지다.'); }
+    }
     if (menu.tab === 0 && list.length) {
       const id = list[menu.sel], d = G.ITEMS[id];
       if (I.hit('a')) { if (d.heal || d.ki) G.game.eat(id); else G.sfx('deny'); }
@@ -145,7 +150,7 @@
     for (let i = 0; i < TABS.length; i++) {
       TX.draw(ctx, TABS[i], x, 16, i === menu.tab ? LIGHT : DIM);
       if (i === menu.tab) { ctx.fillStyle = GOLD; ctx.fillRect(x, 30, TX.width(TABS[i]), 1); }
-      x += TX.width(TABS[i]) + 16;
+      x += TX.width(TABS[i]) + 12;
     }
     ctx.drawImage(G.spr.coin, 300, 19);
     TX.draw(ctx, s.money + '문', 352, 16, LIGHT, 'big', 2);
@@ -228,6 +233,31 @@
         TX.draw(ctx, '전하는 이야기', 148, y, GOLD, 'small'); y += 12;
         for (const ln of TX.wrap(p.lore, 204, 'small')) { if (y > 190) break; TX.draw(ctx, ln, 148, y, DIM, 'small'); y += 11; }
       } else TX.draw(ctx, '겨루고 나면 뒷이야기가 적힌다.', 148, y, DIM, 'small');
+    } else if (menu.tab === 5) {
+      // 동료
+      const list = G.party.recruited(), act = G.party.active();
+      if (!list.length) { TX.draw(ctx, '아직 함께 걷는 이가 없다.', 34, 42, DIM); TX.draw(ctx, '길에서 만난 이들 가운데 따라오겠다는 이가 있을지도 모른다.', 34, 58, DIM, 'small'); return; }
+      for (let i = 0; i < list.length; i++) {
+        const id = list[i], y = 40 + i * 30, on = act.indexOf(id) >= 0;
+        if (i === menu.sel) cursor(ctx, 31, y);
+        const img = G.spr.f[G.ALLIES[id].spr].r[0];
+        ctx.drawImage(img, 40, y + 22 - img.height, img.width, img.height);
+        TX.draw(ctx, G.ALLIES[id].name, 64, y, i === menu.sel ? LIGHT : PAPER);
+        TX.draw(ctx, on ? '함께 간다' : '찻집에서 쉰다', 64, y + 14, on ? GOLD : DIM, 'small');
+      }
+      ctx.fillStyle = LINE; ctx.fillRect(146, 40, 1, 156);
+      const id = list[menu.sel], d = G.ALLIES[id], st = G.party.stats(id), b = G.party.bond(id);
+      TX.draw(ctx, d.kanji, 156, 39, GOLD); TX.draw(ctx, d.full, 352, 41, DIM, 'small', 2);
+      let y = 56;
+      for (const ln of TX.wrap(d.bio, 196, 'small')) { TX.draw(ctx, ln, 156, y, PAPER, 'small'); y += 11; }
+      y += 3;
+      TX.draw(ctx, '체력 ' + G.party.hp(id) + '/' + st.maxhp + '  힘 ' + st.atk + '  굳셈 ' + st.def + '  날램 ' + st.spd, 156, y, LIGHT, 'small'); y += 13;
+      TX.draw(ctx, '정', 156, y, DIM, 'small');
+      for (let k = 0; k < 5; k++) { const hx = 172 + k * 9; ctx.fillStyle = INK; ctx.fillRect(hx, y + 2, 7, 6); ctx.fillStyle = k < b ? RED : '#33303a'; ctx.fillRect(hx + 1, y + 3, 2, 2); ctx.fillRect(hx + 4, y + 3, 2, 2); ctx.fillRect(hx + 1, y + 4, 5, 2); ctx.fillRect(hx + 2, y + 6, 3, 1); }
+      TX.draw(ctx, '지장 앞에서 이야기를 나눈다', 222, y, DIM, 'small'); y += 15;
+      for (const k of d.skills) { TX.draw(ctx, k.name, 156, y, GOLD, 'small'); TX.draw(ctx, k.cost ? '기 ' + k.cost : '자세', 352, y, DIM, 'small', 2); y += 11; for (const ln of TX.wrap(k.desc, 196, 'small').slice(0, 2)) { TX.draw(ctx, ln, 162, y, PAPER, 'small'); y += 10; } y += 2; }
+      TX.wrap(d.passive, 196, 'small').slice(0, 2).forEach((ln, i) => TX.draw(ctx, ln, 156, Math.min(y, 172) + i * 10, DIM, 'small'));
+      TX.draw(ctx, (G.touch ? '치기' : 'Z') + ': 함께 간다 / 쉰다 (둘까지)', 34, 194, DIM, 'small');
     } else if (menu.tab === 3) {
       const log = G.questLog(s);
       if (!log.length) TX.draw(ctx, '아직 할 일이 없다.', 34, 42, DIM);
