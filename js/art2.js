@@ -718,9 +718,11 @@
     S.f = {};
     for (const id in FIGHT) S.f[id] = A.walker(FIGHT[id][0], FIGHT[id][1], FIGHT[id][2]);
     // 원령: 패잔병을 푸르스름하게
-    // 동료: 해녀 이소, 늙은 비구니 도모에
+    // 동료: 해녀 이소, 늙은 비구니 도모에, 무녀 치요
     S.f.iso = A.walker(LOOK.ama[0], LOOK.ama[1], LOOK.ama[2]);
     S.f.tomoe = A.walker(LOOK.tomoe[0], LOOK.tomoe[1], LOOK.tomoe[2]);
+    // 떠돌이 무녀 치요
+    S.f.chiyo = A.walker('miko', 'hakama', { top: 'W', shade: 'E', bot: 'v', bshade: 'r', acc: 'v' });
     S.f.ghost = { r: S.f.ochi.r.map(i => A.tint(i, '#9fc4c8')), l: S.f.ochi.l.map(i => A.tint(i, '#9fc4c8')) };
     const be = mk(g.BENKEI); S.f.benkei = { r: [be, A.shiftY(be, 1)], l: [flip(be), A.shiftY(flip(be), 1)] };
     const as = mk(g.ASAHINA); S.f.asahina = { r: [as, A.shiftY(as, 1)], l: [flip(as), A.shiftY(flip(as), 1)] };

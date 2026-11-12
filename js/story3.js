@@ -77,6 +77,7 @@
     burier: {
       name: '스님', talk(s) {
         say('스님', s.flags.kenshin ? ['안개가 걷혔습니다. 이제 제 일이 시작됩니다.', '수천입니다. 어느 깃발 아래 섰든 묻는 구덩이는 같습니다.'] : ['싸움이 끝나면 묻을 사람이 수천일 겁니다. 미리 와 있는 것입니다.', '오늘 같은 안개에는 누가 누구를 베는지도 모릅니다.']);
+        if (s.flags.chiyoFound) say('스님', '모치즈키 님은 제가 모셨습니다. 부인께서 방울을 한 번 흔들고 가셨지요. 울지는 않으셨습니다.');
       }
     }
   });
@@ -107,6 +108,12 @@
         for (const o of G.E.list) if (o.type === 'actor') o.dead = true;
         m.fog = 0.14; m.hour = 8.6; G.sfx('clang');
       });
+      // 함께 온 무녀는 안개가 걷히자 벌판으로 간다
+      if (G.party.active().indexOf('chiyo') >= 0 && !f.chiyoFound) {
+        f.chiyoFound = 1;
+        me(['안개가 걷히자 치요가 방울을 쥔 채 벌판 쪽으로 뛰어갔다.', '한참 뒤에 돌아왔다. 소매에 흙이 묻어 있었다.']);
+        say('치요', ['……찾았어요. 스님이 먼저 와 계셨어요.', '얼굴이 편했어요. 다행이에요.', '가요. 다친 사람들이 기다려요. 여기에도, 다른 시대에도.']);
+      }
     }
   });
   ST.add('kawa', {
@@ -361,8 +368,9 @@
     if (G.party.has('iso')) mates.push('이소는 아쓰타에 들렀다가 바다로 돌아갔다고 한다.');
     if (G.party.has('tomoe')) mates.push('도모에는 아흔 넘게 살았다고 한다. 셈은 끝내 맞지 않았다.');
     if (G.party.has('asahina')) mates.push('아사히나는 고려로 건너갔다고도 한다.');
+    if (G.party.has('chiyo')) mates.push('치요가 거둔 아이들을 두고 뒷날 이상한 소문이 돌았다.');
     const head = ['그해 겨울, 갓 쓴 사내 하나가 물을 건너 돌아갔다고도 하고', '고갯마루 찻집에 눌러앉았다고도 한다.', road, ink ? '마지막 승부에서는 칼을 뽑지 않았다.' : '마지막 칼도 한 치 앞에서 멎었다.'].concat(mates);
-    G.ui.card(head.concat(['칼 너머', '', '준비한 이야기는 여기까지입니다.', '길은 그대로 열려 있습니다.']), { dimFrom: head.length + 1 });
+    G.ui.card(head.concat(['', '칼 너머', '', '준비한 이야기는 여기까지입니다.', '길은 그대로 열려 있습니다.']), { dimFrom: head.length + 2 });
     G.ui.run(() => { G.game.save(); G.music.play('last'); });
   }
   ST.boss('musashiOld', {
@@ -400,7 +408,7 @@
       say('무사시', ['……졌소. 이제야 졌군.', '지고 나니 쓸 말이 생겼소. 빈 것은 없는 것이 아니오. 벨 수 있는데 베지 않는 그 사이요.', '가장 센 자는 찾았소?']);
       me('모르겠다고 했다. 찾는 동안 찾을 마음이 닳았다고.');
       say('무사시', '그것이 빈 것이오. 받아 적겠소.');
-      G.ui.run(() => ending(s, false));
+      ST.afterWon = () => ending(s, false);
     }
   });
   ST.add('rei', {

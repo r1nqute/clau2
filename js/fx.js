@@ -133,6 +133,13 @@
       if (W.headKind === 'mallet') {
         const hx = Math.round(ox + ca * len), hy = Math.round(oy + sa * len);
         ctx.fillStyle = INK; ctx.fillRect(hx - 4, hy - 4, 9, 9); ctx.fillStyle = '#8f6f48'; ctx.fillRect(hx - 3, hy - 3, 7, 7); ctx.fillStyle = '#b99a6b'; ctx.fillRect(hx - 3, hy - 3, 7, 2);
+      } else if (W.headKind === 'suzu') {
+        const hx = Math.round(ox + ca * len), hy = Math.round(oy + sa * len);
+        const bell = (bx, by) => { ctx.fillStyle = INK; ctx.fillRect(bx - 1, by - 1, 4, 4); ctx.fillStyle = '#e6cc78'; ctx.fillRect(bx, by, 2, 2); ctx.fillStyle = '#a8862f'; ctx.fillRect(bx + 1, by + 1, 1, 1); };
+        // 끈 다섯 가닥
+        const RIB = ['#c8452f', '#e6cc78', '#47708c', '#5f7d42', '#f6f1e3'];
+        for (let i = 0; i < 5; i++) { ctx.fillStyle = RIB[i]; ctx.fillRect(Math.round(ox + ca * 2) - 2 + i, Math.round(oy + sa * 2) + 1, 1, 3 + (i % 2)); }
+        bell(hx - 1, hy - 2); bell(hx - 3, hy + 1); bell(hx + 1, hy + 1); bell(hx - 1, hy + 3);
       } else if (W.headKind === 'fan') {
         const hx = Math.round(ox + ca * len), hy = Math.round(oy + sa * len);
         ctx.fillStyle = INK; ctx.fillRect(hx - 5, hy - 4, 11, 9); ctx.fillRect(hx - 4, hy - 5, 9, 11);
@@ -193,7 +200,9 @@
     mallet: { len: 14, back: 2, hilt: 0, shaft: 1, head: 0, grip: '#6b4a32', steel: '#6b4a32', edge: '#6b4a32', headKind: 'mallet' },
     fan: { len: 8, back: 0, hilt: 0, shaft: 1, head: 0, grip: '#33303a', steel: '#33303a', edge: '#33303a', headKind: 'fan' },
     gun: { len: 16, back: 4, hilt: 5, grip: '#6b4a32', steel: '#5a5c63', edge: '#33303a' },
-    stick: { len: 12, back: 0, hilt: 0, shaft: 1, head: 0, grip: '#b99a6b', steel: '#b99a6b', edge: '#93714a' }
+    stick: { len: 12, back: 0, hilt: 0, shaft: 1, head: 0, grip: '#b99a6b', steel: '#b99a6b', edge: '#93714a' },
+    // 가구라 방울: 짧은 자루 끝에 방울이 층층이, 오색 끈이 늘어진다
+    suzu: { len: 9, back: 0, hilt: 0, shaft: 1, head: 0, grip: '#8f6f48', steel: '#8f6f48', edge: '#8f6f48', headKind: 'suzu' }
   };
   fx.WPN = WPN;
 

@@ -284,6 +284,19 @@
       '...kssssssssk...',
       '....kssSSssk....'
     ],
+    // 무녀: 긴 머리를 흰 종이(다케나가)로 묶어 뒤로 늘였다
+    miko: [
+      '................',
+      '.....kkkkkk.....',
+      '....khhhhhhk....',
+      '...khhhhhhhhk...',
+      '...khhhhhhhhkkk.',
+      '...khhsssshhkwk.',
+      '...khsssssshkwk.',
+      '...ksksssskskhk.',
+      '...ksfssssfskhk.',
+      '....kss66sskkhk.'
+    ],
     wild: [
       '................',
       '....k.kkkk.k....',
@@ -328,6 +341,17 @@
       '...k23222232k...',
       '...kkkkkkkkkk...'
     ],
+    // 흰 고소데에 붉은 하카마
+    hakama: [
+      '...kk222222kk...',
+      '..k2223223222k..',
+      '..ks22322322sk..',
+      '...k44444444k...',
+      '...k44474444k...',
+      '..k4447444744k..',
+      '..k4447kk7444k..',
+      '..kkkkk..kkkkk..'
+    ],
     woman: [
       '...kk222222kk...',
       '..k2222552222k..',
@@ -353,7 +377,8 @@
   const STEP = {
     kimono: ['...kyyk..kkk....', '....kk..........'],
     armor: ['...k44k..kkk....', '....kk..........'],
-    bare: ['...kssk..kkk....', '....kk..........']
+    bare: ['...kssk..kkk....', '....kk..........'],
+    hakama: ['...k447kk744k...', '...kkkk..kkkk...']
   };
   const CHILD = [
     '.....kkkkkk.....',

@@ -168,6 +168,10 @@
     arts() { return G.ART_ORDER.filter(id => id === 'iai' || G.s.skills[id]); },
     skills(m) { return m.d ? m.d.skills : []; },
     skillDef(m, id) { return m.d.skills.find(k => k.id === id); },
+    // 그 재주를 지금 쓸 수 있나, 그 사람에게 쓸 수 있나
+    mateOk(k, m, t) { return k.who === 'down' ? t.down : !t.down && (k.who === 'any' || t !== m); },
+    skillOk(m, k) { return G.s.ki >= k.cost && (k.tgt !== 'mate' || this.P.some(t => this.mateOk(k, m, t))); },
+    glow(t) { fx.ring(t.x + t.ox, t.y - 10, 12, GREEN, 0.4); for (let i = 0; i < 6; i++) fx.parts.push({ x: t.x - 6 + Math.random() * 12, y: t.y - 4 - Math.random() * 14, vx: 0, vy: -18 - Math.random() * 14, life: 0.6, col: i % 2 ? GREEN : LIGHT, s: 1 }); },
     items() { const s = G.s; return Object.keys(s.inv).filter(id => s.inv[id] > 0 && (G.ITEMS[id].heal || G.ITEMS[id].ki)); },
     targets() { return this.live(); },
 
@@ -228,6 +232,48 @@
           this.now([M('이소가 망사리를 풀어 갯것을 나눈다. 모두 기운이 난다.', 0.9)]);
           return;
         }
+        if (act.id === 'mend') {
+          // 고른 이가 그새 쓰러졌으면 가장 다친 산 사람에게
+          let t = act.mate && !act.mate.down ? act.mate : null;
+          if (!t) t = this.up().slice().sort((a, b) => a.hp / a.mhp - b.hp / b.mhp)[0];
+          if (!t) return;
+          const tx = t === m ? 0 : t.x + 12 - m.x, ty = t === m ? 0 : t.y - m.y;
+          this.now([
+            A(0.14, null, q => { m.ox = tx * q; m.oy = ty * q; }),
+            A(0.36, () => {
+              const v = Math.min(t.mhp - t.hp, Math.round(t.mhp * k.pow * (1 + G.party.bond('chiyo') * 0.04)));
+              t.hp += v; G.sfx('heal');
+              this.pop(t.x + t.ox, t.y - 24, '+' + v, GREEN); this.glow(t);
+            }, q => { m.sw = q < 0.5 ? q : 1 - q; }),
+            A(0.14, null, q => { m.ox = tx * (1 - q); m.oy = ty * (1 - q); m.sw = -1; }),
+            M(t === m ? '치요가 제 상처에 약초를 붙였다.' : '치요가 ' + (t.hero ? '내' : t.name + '의') + ' 상처에 약초를 붙이고 쓸어 준다.', 0.6)
+          ]);
+          return;
+        }
+        if (act.id === 'kagura') {
+          const U = this.up();
+          for (const o of U) o.regen = 3;
+          this.now([
+            A(0.7, () => G.sfx('suzu'), q => { m.oy = -Math.abs(Math.sin(q * 12.6)) * 3; m.sw = (q * 3) % 1; if (Math.floor(q * 7) !== Math.floor((q - 0.02) * 7)) fx.parts.push({ x: m.x - 6 + Math.random() * 12, y: m.y - 22, vx: (Math.random() - 0.5) * 30, vy: -20, life: 0.5, col: GOLD, s: 1 }); }),
+            A(0.25, () => { G.sfx('heal'); for (const o of U) this.glow(o); }, () => { m.oy = 0; m.sw = -1; }),
+            M('치요가 방울을 흔들며 돈다. 맑은 소리가 모두를 감싼다. 세 차례 동안 상처가 아문다.', 0.9)
+          ]);
+          return;
+        }
+        if (act.id === 'call') {
+          const t = act.mate && act.mate.down ? act.mate : this.P.find(o => o.down);
+          if (!t) { s.ki = Math.min(s.maxki, s.ki + k.cost); this.now([M('치요가 방울을 쥐었다가 내려놓았다. 부를 사람이 없다.', 0.6)]); return; }
+          this.now([
+            M('치요가 ' + (t.hero ? '나를' : J(t.name, '을', '를')) + ' 부르며 방울을 흔든다.', 0.6),
+            A(0.6, () => G.sfx('suzu'), q => { m.sw = (q * 4) % 1; }),
+            A(0.3, () => {
+              t.down = false; t.stunned = false; t.hp = Math.round(t.mhp * 0.5); t.flash = 0.2;
+              G.sfx('heal'); this.glow(t); this.pop(t.x, t.y - 24, '+' + t.hp, GREEN); m.sw = -1;
+            }),
+            M((t.hero ? '' : J(t.name, '이', '가') + ' ') + '눈을 떴다. 일어난다.', 0.7)
+          ]);
+          return;
+        }
         if (act.id === 'sweep') { this.attacked = true; this.now([M('도모에의 휘두르기.', 0.45)].concat(this.sweep(m, { pow: k.pow, post: k.post }))); return; }
         if (act.id === 'grab') {
           const f = act.target && !act.target.dead && !act.target.gone ? act.target : this.live()[0];
@@ -258,7 +304,7 @@
         if (d.ki) { s.ki = Math.min(s.maxki, s.ki + d.ki + 1); G.sfx('tea'); this.now([M(this.who(m, J(d.name, '을', '를') + ' 마셨다. 기가 찬다.'), 0.7)]); return; }
         const rise = t.down;
         if (rise) { t.down = false; t.hp = 0; }
-        const v = Math.min(t.mhp - t.hp, d.heal);
+        const v = Math.min(t.mhp - t.hp, Math.round(d.heal * (m.key === 'chiyo' ? 1.5 : 1)));
         t.hp += v; G.sfx('eat'); this.pop(t.x + t.ox, t.y - 22, '+' + v, GREEN);
         this.now([M(rise ? J(t.name, '이', '가') + ' ' + J(d.name, '을', '를') + ' 받아먹고 일어났다.' : t === m ? this.who(m, J(d.name, '을', '를') + ' 먹었다.') : t.name + '에게 ' + J(d.name, '을', '를') + ' 먹였다.', 0.7)]);
         return;
@@ -292,7 +338,7 @@
       return [
         A(0.15, () => G.sfx('dash'), k => { m.ox = tx * k; m.oy = ty * k - (o.air ? Math.sin(k * 3.14) * 26 : 0); }),
         A(0.16, () => {
-          G.sfx(o.art === 'hitotsu' || o.art === 'iai' ? 'cut' : m.key === 'asahina' ? 'hit' : 'swing');
+          G.sfx(o.art === 'hitotsu' || o.art === 'iai' ? 'cut' : m.key === 'asahina' ? 'hit' : m.key === 'chiyo' ? 'suzu' : 'swing');
           fx.arc(f.x + 4, f.y - 10, 3.14, o.art === 'hitotsu' ? 20 : 13, 2.8, -1, o.gold ? GOLD : LIGHT, 0.2);
           this.hurtFoe(f, m.atk * o.pow, o, after, m);
         }, k => { m.sw = k; }),
@@ -480,6 +526,15 @@
         if (f.mpost && !f.broken) f.post = Math.max(0, f.post - 4);
       }
       if (this.decoy > 0 && --this.decoy <= 0) this.now([M('짚 인형이 쓰러졌다.', 0.5)]);
+      let rg = false;
+      for (const m of this.P) {
+        if (!(m.regen > 0)) continue;
+        m.regen--;
+        if (m.down) continue;
+        const v = Math.min(m.mhp - m.hp, Math.round(m.mhp * 0.1));
+        if (v > 0) { m.hp += v; this.pop(m.x + m.ox, m.y - 24, '+' + v, GREEN); rg = true; }
+      }
+      if (rg) { G.sfx('suzu'); this.now([M('방울 소리가 남아 상처가 아문다.', 0.45)]); }
       this.free = false;
     },
     // 줄이 비면 다음으로
@@ -506,6 +561,11 @@
         if (money) { s.money += money; line += '   돈 +' + money + '문'; }
         for (const id of drops) { s.inv[id] = (s.inv[id] || 0) + 1; line += '   ' + G.ITEMS[id].name; }
         this.push(M(line, 0.9, true));
+        if (this.P.some(m => m.key === 'chiyo' && !m.down)) {
+          let rose = false;
+          for (const m of this.P) { if (m.down) { m.down = false; m.hp = 0; rose = true; } m.hp = Math.min(m.mhp, m.hp + Math.round(m.mhp * 0.12)); }
+          this.push(A(0.01, () => G.sfx('suzu')), M('치요가 모두의 상처를 매만졌다.' + (rose ? ' 쓰러졌던 이도 일어난다.' : ''), 0.8, true));
+        }
         for (const t of hero.gain(s, exp)) this.push(A(0.01, () => G.sfx('learn')), M(t + ' 체력과 힘이 붙는다.' + (this.P.length > 1 ? ' 동료들도 함께 단련된다.' : ''), 1.0, true));
         return;
       }
@@ -588,7 +648,7 @@
         if (d) { this.msel = (this.msel + (d > 0 ? 1 : -1) + L.length) % L.length; G.sfx('move'); }
         const t = L[this.msel], a = this.pick;
         if (ok) {
-          if (a.type === 'skill' && (t === m || t.down)) { G.sfx('deny'); return; }
+          if (a.type === 'skill' && !this.mateOk(this.skillDef(m, a.id), m, t)) { G.sfx('deny'); return; }
           if (a.type === 'item' && !t.down && t.hp >= t.mhp) { G.sfx('deny'); return; }
           G.sfx('ok'); a.mate = t; this.choose(a);
         } else if (back) { this.sub = this.pick.from || null; G.sfx('move'); }
@@ -614,7 +674,7 @@
           } else {
             const k = this.skillDef(m, id);
             if (s.ki < k.cost) { G.sfx('deny'); return; }
-            if (k.tgt === 'mate' && this.P.length < 2) { G.sfx('deny'); return; }
+            if (!this.skillOk(m, k)) { G.sfx('deny'); return; }
             G.sfx('ok');
             if (k.tgt === 'foe') this.needTarget({ type: 'skill', id, from: 'skill' });
             else if (k.tgt === 'mate') this.needMate({ type: 'skill', id, from: 'skill' }, m);
@@ -651,7 +711,7 @@
       this.pick = a; this.sub = 'mate';
       // 쓰러졌거나 가장 다친 동료를 먼저 가리킨다
       const order = this.P.map((o, i) => [i, o.down ? -1 : o.hp / o.mhp]).sort((x, y) => x[1] - y[1]);
-      if (a.type === 'skill') { const f = order.find(([i]) => this.P[i] !== m && !this.P[i].down); this.msel = f ? f[0] : 0; }
+      if (a.type === 'skill') { const k = this.skillDef(m, a.id), f = order.find(([i]) => this.mateOk(k, m, this.P[i])); this.msel = f ? f[0] : 0; }
       else this.msel = order[0][0];
     },
 
@@ -827,7 +887,7 @@
             const id = list[i], y = 154 + (i - top) * 14;
             let nm, r, ok = true;
             if (this.sub === 'art') { nm = G.ARTS[id].name; r = '기 ' + G.ARTS[id].cost; ok = s.ki >= G.ARTS[id].cost; }
-            else if (this.sub === 'skill') { const k = this.skillDef(cm, id); nm = k.name; r = k.cost ? '기 ' + k.cost : '자세'; ok = s.ki >= k.cost && (k.tgt !== 'mate' || this.P.length > 1); }
+            else if (this.sub === 'skill') { const k = this.skillDef(cm, id); nm = k.name; r = k.cost ? '기 ' + k.cost : k.stance ? '자세' : '—'; ok = this.skillOk(cm, k); }
             else { nm = G.ITEMS[id].name; r = '' + s.inv[id]; }
             if (i === this.ssel) cur(14, y, true);
             TX.draw(ctx, nm, 16, y, !ok ? MUTE : i === this.ssel ? LIGHT : PAPER); TX.draw(ctx, r, 174, y, ok ? GOLD : MUTE, 'big', 2);
@@ -838,7 +898,8 @@
           if (f) TX.draw(ctx, f.name, 12, 171, LIGHT);
         } else if (this.sub === 'mate') {
           const t = this.P[this.msel];
-          TX.draw(ctx, this.pick.type === 'skill' ? '누구 앞을?' : '누구에게?', 12, 155, DIM);
+          const pk = this.pick.type === 'skill' ? this.skillDef(cm, this.pick.id) : null;
+          TX.draw(ctx, !pk ? '누구에게?' : pk.who === 'down' ? '누구를 부를까?' : pk.who === 'any' ? '누구를 돌볼까?' : '누구 앞을?', 12, 155, DIM);
           if (t) TX.draw(ctx, t.name + (t.down ? ' (쓰러짐)' : ''), 12, 171, LIGHT);
         }
       } else {

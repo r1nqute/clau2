@@ -145,6 +145,11 @@
       fact: '가이의 다이묘. "풍림화산(風林火山)" 깃발로 알려졌다. 바람처럼 빠르고, 숲처럼 고요하고, 불처럼 치고, 산처럼 움직이지 않는다는 『손자』의 글귀다.',
       lore: '겐신의 칼을 군배 부채로 받아 냈다는 이야기가 전한다.'
     },
+    chiyo: {
+      name: '모치즈키 치요메', kanji: '望月千代女', years: '생몰년 모름',
+      fact: '시나노 모치즈키 집안의 여인으로 전하지만, 그때의 믿을 만한 기록은 거의 없다. 가와나카지마 넷째 싸움(1561)에서는 양쪽 모두 많은 사람이 죽었다.',
+      lore: '남편 모치즈키 모리토키가 이 싸움에서 죽은 뒤, 떠돌이 무녀들을 거느리고 싸움에 부모를 잃은 아이들을 거두었다고 한다. 그 무녀들이 정탐꾼이었다는 이야기는 훨씬 뒷날 부풀려졌다.'
+    },
     kojiro: {
       name: '사사키 고지로', kanji: '佐々木小次郎', years: '?–1612',
       fact: '간류(巌流)를 연 검객. 후나시마에서 무사시와 겨루다 죽었다. 그 밖의 일은 거의 알려지지 않았고, "사사키"라는 성도 뒷날의 책에 처음 나온다.',
@@ -161,5 +166,5 @@
       lore: '이름이 전하는 이는 몇 되지 않는다.'
     }
   };
-  G.PEOPLE_ORDER = ['tengu', 'iso', 'benkei', 'yoshitsune', 'tomoe', 'asahina', 'kusunoki', 'bokuden', 'kenshin', 'shingen', 'kojiro', 'musashi', 'potters'];
+  G.PEOPLE_ORDER = ['tengu', 'iso', 'benkei', 'yoshitsune', 'tomoe', 'asahina', 'kusunoki', 'bokuden', 'kenshin', 'shingen', 'chiyo', 'kojiro', 'musashi', 'potters'];
 })();

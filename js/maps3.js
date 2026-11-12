@@ -66,6 +66,10 @@
     m.arenas.kenshin = { x0: 24 * 16, y0: 28 * 16, x1: 52 * 16, y1: 46 * 16 };
     m.field = { x: 38 * 16, y: 37 * 16 };
     K.npc('burier', 78, 46);
+    // 떠돌이 무녀가 다친 아시가루를 묶고 있다
+    K.npc('chiyo', 82, 47, { face: 'l', when: s => !(s.allies && s.allies.chiyo) });
+    K.npc('takeda', 80, 48, { id2: 'wounded', face: 'r' });
+    K.put('bale', 84, 48, {}, true);
     K.put('chest', 110, 40, { use: 'chest', id: 'c_kawa' });
     K.put('sign', 46, 38, { use: 'sign', id: 'kawa_ford' });
 

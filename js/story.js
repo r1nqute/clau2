@@ -48,9 +48,11 @@
     won(id, e) {
       const b = bosses[id], s = G.s;
       s.flags[id] = 1; ST.seen(id, 2);
+      ST.afterWon = null;
       if (b && b.won) b.won(e, s);
       for (const a of G.party.active()) { const l = G.ALLY_WON[id] && G.ALLY_WON[id][a]; if (l) say(G.ALLIES[a].name, l); }
-      G.ui.run(() => { G.music.play(G.world.cur.music); G.game.save(); });
+      // 동료들의 한마디까지 듣고 나서야 다음 일(끝맺음 같은 것)로 넘어간다
+      G.ui.run(() => { G.music.play(G.world.cur.music); G.game.save(); const fn = ST.afterWon; ST.afterWon = null; if (fn) fn(); });
     },
     use(pr) { const m = maps[G.s.map]; if (m && m.use) m.use(pr, G.s); }
   };

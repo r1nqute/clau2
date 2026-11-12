@@ -255,7 +255,12 @@
       TX.draw(ctx, '정', 156, y, DIM, 'small');
       for (let k = 0; k < 5; k++) { const hx = 172 + k * 9; ctx.fillStyle = INK; ctx.fillRect(hx, y + 2, 7, 6); ctx.fillStyle = k < b ? RED : '#33303a'; ctx.fillRect(hx + 1, y + 3, 2, 2); ctx.fillRect(hx + 4, y + 3, 2, 2); ctx.fillRect(hx + 1, y + 4, 5, 2); ctx.fillRect(hx + 2, y + 6, 3, 1); }
       TX.draw(ctx, '지장 앞에서 이야기를 나눈다', 222, y, DIM, 'small'); y += 15;
-      for (const k of d.skills) { TX.draw(ctx, k.name, 156, y, GOLD, 'small'); TX.draw(ctx, k.cost ? '기 ' + k.cost : '자세', 352, y, DIM, 'small', 2); y += 11; for (const ln of TX.wrap(k.desc, 196, 'small').slice(0, 2)) { TX.draw(ctx, ln, 162, y, PAPER, 'small'); y += 10; } y += 2; }
+      const cost = k => k.cost ? '기 ' + k.cost : k.stance ? '자세' : '—';
+      if (d.skills.length > 2) {
+        // 재주가 셋이면 한 줄씩 줄여 적는다
+        for (const k of d.skills) { TX.draw(ctx, k.name, 156, y, GOLD, 'small'); TX.draw(ctx, k.brief, 162 + TX.width(k.name, 'small'), y, PAPER, 'small'); TX.draw(ctx, cost(k), 352, y, DIM, 'small', 2); y += 13; }
+        y += 2;
+      } else for (const k of d.skills) { TX.draw(ctx, k.name, 156, y, GOLD, 'small'); TX.draw(ctx, cost(k), 352, y, DIM, 'small', 2); y += 11; for (const ln of TX.wrap(k.desc, 196, 'small').slice(0, 2)) { TX.draw(ctx, ln, 162, y, PAPER, 'small'); y += 10; } y += 2; }
       TX.wrap(d.passive, 196, 'small').slice(0, 2).forEach((ln, i) => TX.draw(ctx, ln, 156, Math.min(y, 172) + i * 10, DIM, 'small'));
       TX.draw(ctx, (G.touch ? '치기' : 'Z') + ': 함께 간다 / 쉰다 (둘까지)', 34, 194, DIM, 'small');
     } else if (menu.tab === 3) {
