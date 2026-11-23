@@ -149,9 +149,14 @@ input[type=search] { background: var(--panel2); color: var(--fg); border: 1px so
 .badge.ace { background: #ff4f7b; color: #fff; }
 .card .nm { font-weight: 900; font-size: 12px; line-height: 1.2; letter-spacing: -.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.4em; overflow-wrap: anywhere; }
 .card .mt { font-size: 10px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stars { font-size: 11px; letter-spacing: 1px; white-space: nowrap; line-height: 1; }
+.stars { font-size: 11px; white-space: nowrap; line-height: 1; display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-num); font-weight: 600; }
+.stars .pips { display: inline-flex; gap: 1.5px; }
+.stars .pips i { width: 5px; height: 9px; border-radius: 1px; background: #2a3346; }
+.stars .pips i.f { background: currentColor; }
+.stars .pips i.p { background: var(--t6); }
+.stars.s6 { color: var(--t6); }
 .stars.s3 { color: var(--t3); } .stars.s4 { color: var(--t4); } .stars.s5 { color: var(--t5); }
-.stars .plus { color: var(--t6); font-weight: 900; font-size: 10px; margin-left: 2px; }
+.stars .plus { color: var(--t6); font-weight: 700; font-size: 10px; }
 .card.unknown .art { background: #141b27 !important; }
 .card.unknown .art::after { content: "?"; font-family: var(--f-num); font-size: 28px; color: #2c3647; }
 .card.unknown .nm, .card.unknown .mt, .card.unknown .stars { color: var(--dim); }
@@ -283,9 +288,11 @@ const COLORS = {
 };
 const teamById = {}; D.teams.forEach(t => { teamById[t.id] = t; });
 const nick = n => n.replace(/^.*\s(Trail Blazers|76ers|\S+)$/, '$1');
-const tierOf = t => t.s;
-const pool = {}; // pool[pos][stars] = [player idx]
-D.players.forEach((p, i) => { ((pool[p.p] ||= {})[p.s] ||= []).push(i); });
+const MAXS = 10;
+const tierOf = s => s >= 9 ? 2 : s >= 6 ? 1 : 0; // 0: 1~5★ 일반, 1: 6~8★ 레어, 2: 9~10★ 에픽
+const cssTier = s => s >= 10 ? 6 : s >= 9 ? 5 : s >= 6 ? 4 : 3;
+const pool = {}; // pool[pos][tier] = [player idx]
+D.players.forEach((p, i) => { ((pool[p.p] ||= {})[tierOf(p.s)] ||= []).push(i); });
 
 /* ---------- storage ---------- */
 const KEY = 'playoff-draft-v1';
@@ -303,12 +310,16 @@ const rnd = n => Math.floor(Math.random() * n);
 const pick = a => a[rnd(a.length)];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function starsHtml(base, plus) {
-  const cls = 's' + Math.min(5, base);
-  return `<span class="stars ${cls}">${'★'.repeat(base)}${plus ? `<span class="plus">★+${plus}</span>` : ''}</span>`;
+  plus = plus || 0;
+  const tot = Math.min(MAXS, base + plus), cls = 's' + cssTier(tot);
+  let pips = '';
+  for (let k = 1; k <= MAXS; k++) pips += `<i class="${k <= base ? 'f' : k <= tot ? 'p' : ''}"></i>`;
+  return `<span class="stars ${cls}" aria-label="${tot}성"><span class="pips">${pips}</span>★${tot}${plus ? `<span class="plus">+${plus}</span>` : ''}</span>`;
 }
+function avgStars(v) { return `<span class="stars s${cssTier(Math.round(v))}">평균 ★${v.toFixed(1)}</span>`; }
 function jersey(abbr, no) {
   const [a, b, c] = COLORS[abbr] || ['#444', '#999', '#fff'];
-  const num = (no || '').slice(0, 2);
+  const num = ((no || '').match(/\d+/) || [''])[0].slice(0, 2);
   return `<svg viewBox="0 0 100 112" aria-hidden="true"><path d="M29 5h11q10 14 20 0h11q1 21 14 26v74q-35 7-70 0V31q13-5 14-26z" fill="${a}"/>
   <path d="M29 5h11q10 14 20 0h11" fill="none" stroke="${b}" stroke-width="4"/><path d="M71 5q1 21 14 26M29 5q-1 21-14 26" fill="none" stroke="${b}" stroke-width="4"/>
   <text x="50" y="47" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="15" fill="${c}" letter-spacing="1">${abbr}</text>
@@ -326,14 +337,15 @@ function emptyCard(s, picking) {
 }
 function cardHtml(i, o = {}) {
   const p = D.players[i], t = teamById[p.t];
-  const plus = o.plus || 0, total = Math.min(6, p.s + plus);
-  const cls = ['card', 't' + total, o.held ? 'held' : '', o.picking ? 'picking' : '', plus ? 'syn' : '', o.flip ? (o.gold ? 'gold' : 'flip') : '', o.unknown ? 'unknown' : '', o.empty ? 'empty' : ''].join(' ');
+  const plus = o.plus || 0, total = Math.min(MAXS, p.s + plus);
+  const cls = ['card', 't' + cssTier(total), o.held ? 'held' : '', o.picking ? 'picking' : '', plus ? 'syn' : '', o.flip ? (o.gold ? 'gold' : 'flip') : '', o.unknown ? 'unknown' : '', o.empty ? 'empty' : ''].join(' ');
   const badges = (o.isNew ? '<span class="badge new">NEW</span>' : '') + (o.held ? '<span class="badge hold">HOLD</span>' : '') + (p.x && !o.unknown && o.showAce ? '<span class="badge ace">ACE</span>' : '');
   return `<div class="${cls}" ${o.slot != null ? `data-slot="${o.slot}" role="button" tabindex="0" aria-pressed="${!!o.held}"` : ''}${o.fslot != null ? ` data-fslot="${o.fslot}" role="button" tabindex="0"` : ''}${o.pickId != null ? ` data-pick="${o.pickId}" role="button" tabindex="0"` : ''}>
     <div class="hd"><span>${p.p}</span><span class="cf">${CONF[t.c]}</span></div>
     <div class="art ${t.c}">${o.unknown ? '' : jersey(t.a, p.no)}<div class="badges">${badges}</div></div>
     <div class="nm">${esc(p.n)}</div>
-    <div class="mt">${p.p} · ${t.a} · ${t.y} ${RES[t.r]}</div>
+    <div class="mt">${t.a} · ${t.y} ${RES[t.r]}</div>
+    <div class="mt">${o.unknown ? '&nbsp;' : `${p.pts.toFixed(1)}점 ${p.reb.toFixed(1)}리 ${p.ast.toFixed(1)}어`}</div>
     ${starsHtml(p.s, plus)}
   </div>`;
 }
@@ -355,11 +367,11 @@ function synergy(ids) {
     if (nFr === 5) b++;
     return b;
   });
-  const items = ps.map((p, k) => Math.min(6, p.s + plus[k]) - p.s);
+  const items = ps.map((p, k) => Math.min(MAXS, p.s + plus[k]) - p.s);
   const score = ps.reduce((s, p, k) => s + p.s + items[k], 0);
   let title = '시너지 없음', cls = '', desc = '같은 팀 3장부터 부분 시너지! 5장을 한 팀·한 시즌으로 맞추면 레전더리가 발동합니다.';
   const tt = teamById[tTeam];
-  if (legend) { title = 'LEGENDARY'; cls = 'legend'; desc = `${tt.y} ${tt.a} 완전체! 전 카드 +2성 (6성 한계 돌파)`; }
+  if (legend) { title = 'LEGENDARY'; cls = 'legend'; desc = `${tt.y} ${tt.a} 완전체! 전 카드 +2성 (최대 10성)`; }
   else {
     const parts = [];
     if (nFr === 5) parts.push(`${tFr} 프랜차이즈 5장 +1성(프레스티지)`);
@@ -376,12 +388,12 @@ function synergy(ids) {
 
 /* ---------- draft ---------- */
 let draft = null;
-function rollRarity(rates) { const r = Math.random(); return r < rates[0] ? 3 : r < rates[0] + rates[1] ? 4 : 5; }
+function rollRarity(rates) { const r = Math.random(); return r < rates[0] ? 0 : r < rates[0] + rates[1] ? 1 : 2; }
 function dealOne(slot, rates, taken) {
   const pos = SLOTS[slot];
   for (let k = 0; k < 30; k++) {
     let s = rollRarity(rates); let list = pool[pos][s];
-    while (!list || !list.length) { s = s === 3 ? 5 : s - 1; list = pool[pos][s]; }
+    while (!list || !list.length) { s = s === 0 ? 2 : s - 1; list = pool[pos][s]; }
     const i = pick(list);
     if (!taken.some(j => D.players[j].n === D.players[i].n)) return i;
   }
@@ -444,7 +456,7 @@ function confirmDraft() {
   draft.done = true; draft.date = new Date();
   const syn = synergy(draft.slots);
   if (syn.legend) unlockAch('legend');
-  if (syn.score >= 30) unlockAch('perfect');
+  if (syn.score >= 40) unlockAch('perfect');
   go('roster');
 }
 
@@ -517,7 +529,7 @@ function teamScore(t) { return t.p.reduce((s, i) => s + D.players[i].s, 0) + (t.
 function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(() => t.r === 'C' ? 1 : 0), score: teamScore(t), team: t }; }
 function startTour() {
   const syn = synergy(draft.slots);
-  const me = { me: true, name: 'MY DREAM TEAM', sub: (draft.free ? 'FREE MODE · ' : 'PLAYER · ') + (syn.legend ? 'LEGENDARY' : syn.score >= 24 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
+  const me = { me: true, name: 'MY DREAM TEAM', sub: (draft.free ? 'FREE MODE · ' : 'PLAYER · ') + (syn.legend ? 'LEGENDARY' : syn.score >= 35 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
   const by = r => D.teams.filter(t => r.includes(t.r));
   const used = new Set(draft.slots.map(i => D.players[i].t));
   const take = (arr) => { let t; do { t = pick(arr); } while (used.has(t.id)); used.add(t.id); return makeOpp(t); };
@@ -536,7 +548,7 @@ const LINES = {
   C: ['림 프로텍션 블록 쇼', '골밑 포스트업을 지배', '더블더블과 스크린으로 공격의 기둥', '리바운드 싸움을 압도']
 };
 function playGame(A, B) {
-  const p = 1 / (1 + Math.exp(-(A.score - B.score) / 4));
+  const p = 1 / (1 + Math.exp(-(A.score - B.score) / 5));
   const aWin = Math.random() < p, W = aWin ? A : B;
   const ws = W.ids.map(i => D.players[i]);
   const weights = ws.map(x => x.pts + 4);
@@ -585,16 +597,16 @@ function onChampion() {
   save.titles = (save.titles || 0) + 1; persist();
   unlockAch('title');
   if (tour.sweeps) unlockAch('sweep');
-  if (tour.rounds[0][0][0].score <= 18) unlockAch('underdog');
+  if (tour.rounds[0][0][0].score <= 22) unlockAch('underdog');
 }
 
 /* ---------- achievements ---------- */
 const ACH = [
   ['title', '첫 번째 우승 반지', '올타임 플레이오프에서 우승'],
   ['sweep', '16승 무패', '세 시리즈를 모두 4-0으로 끝내고 우승'],
-  ['underdog', '언더독', '팀 점수 18 이하로 우승'],
+  ['underdog', '언더독', '팀 점수 22 이하로 우승'],
   ['legend', '레전더리', '한 팀·한 시즌 주전 5명을 완성'],
-  ['perfect', '만점 로스터', '팀 점수 30 달성'],
+  ['perfect', '만점 로스터', '팀 점수 40 이상 달성'],
   ['dex100', '수집가', '선수 카드 100장 모으기'],
   ['dex400', '스카우트', '선수 카드 400장 모으기'],
   ['gal10', '왕조 기록관', '갤러리 10팀 완성']
@@ -653,10 +665,10 @@ function vMain() {
     </div>
     <div class="car-nav"><button data-act="car--1" aria-label="이전">‹</button><div class="dots">${slides.map((_, k) => `<i class="${k === carIdx ? 'on' : ''}"></i>`).join('')}</div><button data-act="car-1" aria-label="다음">›</button></div>
     <div class="rules">
-      <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
-      <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%). 그 팀 카드를 홀드하면 장당 +15%p, 같은 팀 3명이 모이면 +15%p 더 붙습니다(최대 85%).</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
-      <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 6성)</p></div>
-      <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급: 우승 5성 · 파이널/컨퍼런스 파이널 4성 · 2라운드/1라운드 3성 · 플레이오프 평균 25점 이상(또는 팀 내 최다 득점 22점 이상) 에이스 +1성</small></div>
+      <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
+      <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%). 그 팀 카드를 홀드하면 장당 +15%p, 같은 팀 3명이 모이면 +15%p 더 붙습니다(최대 85%).</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
+      <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 10성)</p></div>
+      <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급(1~10성): 그 시즌 플레이오프 경기당 기록으로 매깁니다. 득점(슈팅 효율 반영)·리바운드·어시스트·스틸·블록·턴오버를 합친 점수를 같은 포지션 176명 중 순위로 나눠, 상위 2%가 10성입니다.</small></div>
       <div class="panel"><b>5. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
     </div>
     <footer>선수 기록: Basketball-Reference 플레이오프 경기당 기록(선발 출전 상위 5명).<br>NBA 및 각 구단과 관계없는 팬 제작 게임입니다.</footer>
@@ -666,8 +678,8 @@ function vMain() {
 function vDraft() {
   const syn = synergy(draft.slots), h = rerollHint();
   const pips = [0, 1, 2].map(k => `<i class="${k < draft.left ? 'on' : ''}"></i>`).join('');
-  const board = draft.slots.map((i, s) => cardHtml(i, { slot: s, held: draft.held[s], isNew: draft.isNew[s], plus: syn.plus[s], flip: draft.flip[s], gold: draft.flip[s] && D.players[i].s >= 5, showAce: true })).join('');
-  draft.celebrate = draft.slots.filter((i, s) => draft.flip[s] && D.players[i].s >= 5);
+  const board = draft.slots.map((i, s) => cardHtml(i, { slot: s, held: draft.held[s], isNew: draft.isNew[s], plus: syn.plus[s], flip: draft.flip[s], gold: draft.flip[s] && D.players[i].s >= 9, showAce: true })).join('');
+  draft.celebrate = draft.slots.filter((i, s) => draft.flip[s] && D.players[i].s >= 9);
   draft.flip = [0, 0, 0, 0, 0];
   let hint = '';
   if (h) { const t = teamById[h.team]; hint = `<p class="hint">다음 리롤: 슬롯마다 ${Math.round(h.p * 100)}% 확률로 <b>${t.y} ${t.a}</b> 선수 등장${h.n >= 3 ? ` (${h.n + 1}명 집결 확률 UP!)` : ''}<br><small style="color:var(--mute)">리롤 ${Math.round(h.parts[0] * 100)}%${h.hc ? ` + 홀드 ${h.hc}장 ${Math.round(h.parts[1] * 100)}%p` : ' · 이 팀 카드를 홀드하면 장당 +15%p'}${h.parts[2] ? ` + 3명 집결 15%p` : ''}${h.p >= 0.85 ? ' (최대 85%)' : ''}</small></p>`; }
@@ -807,7 +819,7 @@ function vGal() {
       const [c1, c2] = COLORS[t.a] || ['#333', '#666'], o = teamOwned(t);
       return `<div class="gcard"><div class="ban" style="background:linear-gradient(120deg, ${c1} 0%, ${c1}cc 45%, #0d1320 100%)">
         <span class="bigab">${t.a}</span><div class="ico">${smallJersey(t.a)}</div>
-        <div class="meta"><small>${t.y} ${RES[t.r]} · ${CONF[t.c]} ${starsHtml(t.s, 0)}</small><b>${esc(t.n)}</b></div>
+        <div class="meta"><small>${t.y} ${RES[t.r]} · ${CONF[t.c]} ${avgStars(t.s)}</small><b>${esc(t.n)}</b></div>
         <span class="cnt">${o} / 5 수집</span>${o === 5 ? '<span class="done">★ COMPLETE</span>' : ''}</div>
         <p class="desc">${describe(t)}</p>
         <div class="ros">${t.p.map(i => { const p = D.players[i]; return `<div class="${owns(i) ? '' : 'no'}"><small>${p.p}</small><b>${owns(i) ? esc(p.n.split(' ').slice(-1)[0]) : '???'}</b></div>`; }).join('')}</div></div>`;
@@ -840,7 +852,7 @@ function celebrate(ids) {
     }
   });
   const names = ids.map(i => D.players[i].n);
-  h += `<div class="label">${ids.length > 1 ? '★5 × ' + ids.length : '★★★★★'}<small>${esc(names.join(' · '))}</small></div>`;
+  h += `<div class="label">${ids.length > 1 ? 'EPIC × ' + ids.length : 'EPIC ★' + D.players[ids[0]].s}<small>${esc(names.join(' · '))}</small></div>`;
   b.innerHTML = h; document.body.appendChild(b);
   try { navigator.vibrate && navigator.vibrate([40, 40, 80]); } catch (e) {}
   setTimeout(() => b.remove(), 1700);
@@ -874,13 +886,13 @@ function rosterImage() {
     g.fillStyle = '#121926'; g.beginPath(); g.roundRect(60, y, 960, 170, 22); g.fill();
     g.fillStyle = t.c === 'E' ? '#2a5bd7' : '#e04f35'; g.beginPath(); g.roundRect(80, y + 15, 140, 140, 16); g.fill();
     g.save(); g.translate(100, y + 25); g.scale(1, 1.05); g.fillStyle = c1; g.fill(jp); g.strokeStyle = c2; g.lineWidth = 4; g.stroke(jp);
-    g.fillStyle = c3; g.font = '700 32px Oswald, sans-serif'; g.textAlign = 'center'; g.fillText((p.no || '').slice(0, 2), 50, 80); g.restore();
+    g.fillStyle = c3; g.font = '700 32px Oswald, sans-serif'; g.textAlign = 'center'; g.fillText(((p.no || '').match(/\d+/) || [''])[0].slice(0, 2), 50, 80); g.restore();
     g.textAlign = 'left';
     g.fillStyle = '#8592a8'; g.font = '700 28px Oswald, sans-serif'; g.fillText(p.p, 250, y + 55);
     g.fillStyle = '#eef2f8'; g.font = '900 44px "Noto Sans KR", sans-serif'; g.fillText(p.n, 250, y + 105);
     g.fillStyle = '#8592a8'; g.font = '500 26px "Noto Sans KR", sans-serif'; g.fillText(`${t.a} · ${t.y} ${RES[t.r]} · PO ${p.pts.toFixed(1)}점`, 250, y + 145);
-    const st = Math.min(6, p.s + syn.plus[k]);
-    g.fillStyle = st >= 6 ? '#4ff0ff' : st === 5 ? '#ffc83d' : st === 4 ? '#a982ff' : '#b9c2d0'; g.font = '36px sans-serif'; g.textAlign = 'right'; g.fillText('★'.repeat(st), 990, y + 60); g.textAlign = 'left';
+    const st = Math.min(MAXS, p.s + syn.plus[k]);
+    g.fillStyle = st >= 10 ? '#4ff0ff' : st >= 9 ? '#ffc83d' : st >= 6 ? '#a982ff' : '#b9c2d0'; g.font = '700 44px Oswald, sans-serif'; g.textAlign = 'right'; g.fillText('★ ' + st, 990, y + 62); g.textAlign = 'left';
   });
   g.fillStyle = '#4a5568'; g.font = '500 24px "Noto Sans KR", sans-serif'; g.fillText(fmtDate(draft.date || new Date()), 70, 1300);
   return cv.toDataURL('image/png');
