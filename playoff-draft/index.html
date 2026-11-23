@@ -418,32 +418,34 @@ function synergy(ids) {
   const top = o => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
   const [tTeam, nTeam] = top(byTeam), [tFr, nFr] = top(byFr), [tSea, nSea] = top(bySea), [tConf, nConf] = top(byConf);
   const legend = nTeam === 5;
+  // season link only counts cards from a different team in the same year
+  const seaTeams = {}; ts.forEach(t => { (seaTeams[t.y] ||= new Set()).add(t.id); });
+  const links = []; // [label, bonus text]
   const plus = ts.map(t => {
-    if (legend) return 2;
     let b = 0;
-    if (byFr[t.a] >= 3) b++;
-    if (nSea === 5) b++;
-    if (nConf === 5) b++;
-    if (nFr === 5) b++;
+    const nt = byTeam[t.id], nf = byFr[t.a];
+    if (nt >= 5) b += 3; else if (nt >= 3) b += 2; else if (nt >= 2) b += 1;
+    else if (nf >= 5) b += 2; else if (nf >= 2) b += 1;
+    if (seaTeams[t.y].size >= 2) b += 1;
+    if (byConf[t.c] >= 4) b += 1;
     return b;
   });
+  // describe active links (once per group)
+  Object.entries(byTeam).forEach(([id, n]) => { if (n >= 2) { const t = teamById[id]; links.push([`${n === 5 ? '레전더리' : '팀메이트'} ${t.y} ${t.a} ${n}장`, `+${n >= 5 ? 3 : n >= 3 ? 2 : 1}`]); } });
+  Object.entries(byFr).forEach(([a, n]) => { const sameTeam = Object.entries(byTeam).some(([id, m]) => teamById[id].a === a && m >= 2); const loose = ts.filter(t => t.a === a && byTeam[t.id] < 2).length;
+    if (n >= 2 && loose) links.push([`${n === 5 ? '프레스티지' : '프랜차이즈'} ${a} ${n}장`, `+${n >= 5 ? 2 : 1}${sameTeam ? ' (팀메이트 제외 카드)' : ''}`]); });
+  Object.entries(seaTeams).forEach(([y, set]) => { if (set.size >= 2) links.push([`같은 시즌 ${y} ${bySea[y]}장`, '+1']); });
+  Object.entries(byConf).forEach(([c, n]) => { if (n >= 4) links.push([`${CONF[c]} ${n}장`, '+1']); });
   const items = ps.map((p, k) => Math.min(MAXS, p.s + plus[k]) - p.s);
+  const bonus = items.reduce((a, b) => a + b, 0);
   const score = ps.reduce((s, p, k) => s + p.s + items[k], 0);
-  let title = '시너지 없음', cls = '', desc = '같은 팀 3장부터 부분 시너지! 5장을 한 팀·한 시즌으로 맞추면 레전더리가 발동합니다.';
   const tt = teamById[tTeam];
-  if (legend) { title = 'LEGENDARY'; cls = 'legend'; desc = `${tt.y} ${tt.a} 완전체! 전 카드 +2성 (최대 10성)`; }
-  else {
-    const parts = [];
-    if (nFr === 5) parts.push(`${tFr} 프랜차이즈 5장 +1성(프레스티지)`);
-    if (nFr >= 3) parts.push(`${tFr} ${nFr}장 +1성`);
-    if (nSea === 5) parts.push(`${tSea} 시즌 5장 전원 +1성`);
-    if (nConf === 5) parts.push(`${CONF[tConf]} 5장 전원 +1성`);
-    if (parts.length) { title = nFr === 5 ? 'PRESTIGE' : `TEAM ${nFr}/5`; if (nFr < 3) title = nSea === 5 ? 'SEASON' : 'CONFERENCE'; cls = 'part'; desc = parts.join(' · '); }
-  }
-  const chips = [
-    [`팀: ${tt.a} ${tt.y}`, nTeam], [`프랜차이즈: ${tFr}`, nFr], [`시즌: ${tSea}`, nSea], [`컨퍼런스: ${CONF[tConf]}`, nConf]
-  ];
-  return { plus: items, score, legend, title, cls, desc, chips, target: tTeam, nTeam, nFr };
+  let title = '시너지 없음', cls = '', desc = '같은 팀·같은 프랜차이즈·같은 시즌 카드가 2장만 겹쳐도 보너스! 같은 컨퍼런스 4장 이상도 +1입니다.';
+  if (legend) { title = 'LEGENDARY'; cls = 'legend'; desc = `${tt.y} ${tt.a} 완전체! 전 카드 +3성 (최대 10성)`; }
+  else if (links.length) { title = `연결 ${links.length}개 · +${bonus}성`; cls = 'part'; desc = '겹치는 카드마다 보너스가 붙었습니다.'; }
+  const chips = links.map(([l, b]) => [`${l} ${b}`, 0, true]);
+  if (!links.length) chips.push([`팀: ${tt.a} ${tt.y} ${nTeam}/5`, 0, false], [`시즌: ${tSea} ${nSea}/5`, 0, false], [`컨퍼런스: ${CONF[tConf]} ${nConf}/5`, 0, false]);
+  return { plus: items, score, bonus, legend, title, cls, desc, chips, target: tTeam, nTeam, nFr };
 }
 
 /* ---------- draft ---------- */
@@ -729,7 +731,7 @@ function vMain() {
     <div class="rules">
       <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
       <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%). 그 팀 카드를 홀드하면 장당 +15%p, 같은 팀 3명이 모이면 +15%p 더 붙습니다(최대 85%).</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
-      <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 10성)</p></div>
+      <div class="panel"><b>3. 시너지</b><p>공통점이 겹친 카드마다 별이 붙습니다(최대 10성).<br>· 같은 팀·같은 시즌: <span class="hl3">2장 +1</span>, 3~4장 +2, 5장 <span class="hl6">레전더리</span> +3<br>· 같은 프랜차이즈(다른 시즌): 2장 이상 +1, 5장 <span class="hl4">프레스티지</span> +2<br>· 같은 시즌의 다른 팀 카드와 겹치면 +1<br>· 같은 컨퍼런스 4장 이상 +1</p></div>
       <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급(1~10성): 그 시즌 플레이오프 경기당 기록으로 매깁니다. 득점(슈팅 효율 반영)·리바운드·어시스트·스틸·블록·턴오버를 합친 점수를 같은 포지션 176명 중 순위로 나눠, 상위 2%가 10성입니다.</small></div>
       <div class="panel"><b>5. 전술과 상성</b><p>팀마다 그 시즌 기록(페이스, 3점 시도 비율, 자유투·공격 리바운드, 수비 효율, 어시스트 비율, 에이스 득점 비중)으로 전술이 정해집니다. 상성이 유리하면 팀 점수 +${COUNTER}로 계산해서, 점수가 낮은 팀도 강팀을 잡을 수 있습니다.</p>${ringHtml()}<small>내 팀은 카드의 원래 팀 기록으로 주·보조 전술 두 가지를 갖고, 시리즈마다 하나를 고릅니다.</small></div>
       <div class="panel"><b>6. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
@@ -760,7 +762,7 @@ function synPanel(syn, hint, ids) {
   const tops = ids ? topStyles(myVec(ids)).slice(0, 2) : null;
   return `<div class="panel syn"><h3 class="${syn.cls}">${syn.title}</h3><p>${esc(syn.desc)}</p>${hint || ''}
     ${tops ? `<p style="margin-top:6px">전술: ${tops.map(styChip).join(' ')} <small style="color:var(--mute)">카드의 원래 팀 기록으로 정해집니다</small></p>` : ''}
-    <div class="chips">${syn.chips.map(([l, n]) => `<span class="chip ${n >= 3 ? 'on' : ''}">${esc(l)} ${n}/5</span>`).join('')}</div></div>`;
+    <div class="chips">${syn.chips.map(([l, n, on]) => `<span class="chip ${on ? 'on' : ''}">${esc(l)}</span>`).join('')}</div></div>`;
 }
 function fmtDate(d) { return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`; }
 function vRoster(ids, isShared) {
