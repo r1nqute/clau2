@@ -109,6 +109,33 @@ footer { color: var(--dim); font-size: 11px; text-align: center; padding: 18px 0
 .card.flip { animation: flip .45s ease; }
 @keyframes flip { 0% { transform: rotateY(90deg) scale(.96); } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .card.flip { animation: none; } }
+.card.gold { animation: goldpop .9s ease; }
+.card.gold::after { content: ""; position: absolute; inset: 0; border-radius: 10px; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,236,170,.75) 48%, transparent 66%) no-repeat; background-size: 250% 100%; animation: shine 1.4s ease .2s 2 both; }
+@keyframes goldpop { 0% { transform: rotateY(90deg) scale(.9); } 55% { transform: scale(1.12); box-shadow: 0 0 40px 8px rgba(255,200,61,.9); } 100% { transform: none; } }
+@keyframes shine { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.burst { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.burst .flash { position: absolute; inset: 0; background: radial-gradient(circle at var(--x) var(--y), rgba(255,214,102,.7), rgba(255,138,31,.25) 30%, transparent 65%); animation: flash 1.2s ease-out both; }
+.burst .spark { position: absolute; left: var(--x); top: var(--y); width: 8px; height: 8px; border-radius: 2px; background: var(--c); transform: translate(-50%, -50%);
+  animation: spark 1.3s cubic-bezier(.15,.7,.3,1) both; }
+.burst .ring { position: absolute; left: var(--x); top: var(--y); width: 20px; height: 20px; border: 3px solid var(--t5); border-radius: 50%; transform: translate(-50%, -50%); animation: ring .9s ease-out both; }
+.burst .label { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font-family: var(--f-num); font-weight: 700; font-size: 44px; letter-spacing: .06em; color: var(--t5);
+  text-shadow: 0 0 18px rgba(255,170,0,.9), 0 3px 0 #6b3a00; width: min(90vw, 440px); animation: lbl 1.6s ease both; text-align: center; line-height: 1.1; }
+.burst .label small { display: block; margin-top: 8px; line-height: 1.4; font-family: var(--f-body); font-size: 15px; color: var(--fg); letter-spacing: 0; text-shadow: 0 1px 6px #000; }
+@keyframes flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes spark { 0% { transform: translate(-50%, -50%) scale(.4); opacity: 1; } 100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--r)) scale(1); opacity: 0; } }
+@keyframes ring { 0% { opacity: 1; width: 20px; height: 20px; } 100% { opacity: 0; width: 360px; height: 360px; } }
+@keyframes lbl { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); } 75% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -60%) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .card.gold, .card.gold::after, .burst .spark, .burst .ring { animation: none; } .burst .spark, .burst .ring { display: none; } }
+.card.empty { border-style: dashed; border-color: var(--line); background: transparent; cursor: pointer; }
+.card.empty .art { background: var(--panel) !important; color: var(--mute); font-size: 12px; font-weight: 700; text-align: center; }
+.card.picking { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255,138,31,.5); }
+.picker-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.picker-h b { font-size: 16px; }
+.picker-h small { color: var(--mute); }
+input[type=search] { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; flex: 1; min-width: 0; }
+.mode-tag { display: inline-flex; background: #102836; color: var(--hold); border: 1px solid #1d5068; padding: 2px 9px; border-radius: 6px; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+.empty-note { color: var(--mute); text-align: center; padding: 18px 8px; }
 .card .hd { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; letter-spacing: .06em; }
 .card .hd .cf { color: var(--mute); }
 .card .art { position: relative; border-radius: 8px; aspect-ratio: 4/5; display: grid; place-items: center; overflow: hidden; max-width: 100%; }
@@ -291,12 +318,18 @@ function smallJersey(abbr) {
   const [a, b] = COLORS[abbr] || ['#444', '#999'];
   return `<svg viewBox="0 0 100 112" width="26" height="28" aria-hidden="true"><path d="M29 5h11q10 14 20 0h11q1 21 14 26v74q-35 7-70 0V31q13-5 14-26z" fill="${a}" stroke="${b}" stroke-width="5"/></svg>`;
 }
+function emptyCard(s, picking) {
+  return `<div class="card empty ${picking ? 'picking' : ''}" data-fslot="${s}" role="button" tabindex="0">
+    <div class="hd"><span>${SLOTS[s]}</span><span class="cf">-</span></div>
+    <div class="art">+<br>${SLOTS[s]} 선택</div>
+    <div class="nm">빈 자리</div><div class="mt">도감에서 고르기</div><span class="stars s3">&nbsp;</span></div>`;
+}
 function cardHtml(i, o = {}) {
   const p = D.players[i], t = teamById[p.t];
   const plus = o.plus || 0, total = Math.min(6, p.s + plus);
-  const cls = ['card', 't' + total, o.held ? 'held' : '', plus ? 'syn' : '', o.flip ? 'flip' : '', o.unknown ? 'unknown' : ''].join(' ');
+  const cls = ['card', 't' + total, o.held ? 'held' : '', o.picking ? 'picking' : '', plus ? 'syn' : '', o.flip ? (o.gold ? 'gold' : 'flip') : '', o.unknown ? 'unknown' : '', o.empty ? 'empty' : ''].join(' ');
   const badges = (o.isNew ? '<span class="badge new">NEW</span>' : '') + (o.held ? '<span class="badge hold">HOLD</span>' : '') + (p.x && !o.unknown && o.showAce ? '<span class="badge ace">ACE</span>' : '');
-  return `<div class="${cls}" ${o.slot != null ? `data-slot="${o.slot}" role="button" tabindex="0" aria-pressed="${!!o.held}"` : ''}>
+  return `<div class="${cls}" ${o.slot != null ? `data-slot="${o.slot}" role="button" tabindex="0" aria-pressed="${!!o.held}"` : ''}${o.fslot != null ? ` data-fslot="${o.fslot}" role="button" tabindex="0"` : ''}${o.pickId != null ? ` data-pick="${o.pickId}" role="button" tabindex="0"` : ''}>
     <div class="hd"><span>${p.p}</span><span class="cf">${CONF[t.c]}</span></div>
     <div class="art ${t.c}">${o.unknown ? '' : jersey(t.a, p.no)}<div class="badges">${badges}</div></div>
     <div class="nm">${esc(p.n)}</div>
@@ -350,7 +383,7 @@ function dealOne(slot, rates, taken) {
     let s = rollRarity(rates); let list = pool[pos][s];
     while (!list || !list.length) { s = s === 3 ? 5 : s - 1; list = pool[pos][s]; }
     const i = pick(list);
-    if (!taken.includes(i)) return i;
+    if (!taken.some(j => D.players[j].n === D.players[i].n)) return i;
   }
   return pick(pool[pos][3]);
 }
@@ -366,7 +399,7 @@ function collect(ids) {
 }
 function startDraft() {
   const slots = [];
-  for (let s = 0; s < 5; s++) slots.push(dealOne(s, [.5, .4, .1], slots));
+  for (let s = 0; s < 5; s++) slots.push(dealOne(s, [.7, .25, .05], slots));
   const fresh = collect(slots);
   draft = { slots, held: [0, 0, 0, 0, 0], left: 3, isNew: slots.map(i => fresh.includes(i)), flip: [1, 1, 1, 1, 1], done: false };
   go('draft');
@@ -394,7 +427,7 @@ function reroll() {
     let i = null;
     if (h && Math.random() < h.p) {
       const t = teamById[h.team], cand = t.p.find(j => D.players[j].p === SLOTS[s]);
-      if (cand != null && !others.includes(cand)) i = cand;
+      if (cand != null && !others.some(j => D.players[j].n === D.players[cand].n)) i = cand;
     }
     if (i == null) i = dealOne(s, [.7, .25, .05], others);
     slots[s] = i; flip[s] = 1;
@@ -413,13 +446,76 @@ function confirmDraft() {
   go('roster');
 }
 
+/* ---------- free mode ---------- */
+let free = { slots: [null, null, null, null, null], pick: 0, q: '', conf: '', sort: 'star', limit: 45 };
+function startFree(keep) {
+  if (!keep) free.slots = [null, null, null, null, null];
+  free.pick = free.slots.findIndex(x => x == null); if (free.pick < 0) free.pick = null;
+  free.q = ''; free.limit = 45;
+  go('free');
+}
+function freeSyn() {
+  const filled = free.slots.map((i, s) => [i, s]).filter(x => x[0] != null);
+  if (!filled.length) return { score: 0, plusBySlot: [0, 0, 0, 0, 0], syn: null };
+  const syn = synergy(filled.map(x => x[0]));
+  const plusBySlot = [0, 0, 0, 0, 0]; filled.forEach(([, s], k) => { plusBySlot[s] = syn.plus[k]; });
+  return { score: syn.score, plusBySlot, syn };
+}
+function vFree() {
+  const fs = freeSyn();
+  const board = free.slots.map((i, s) => i == null ? emptyCard(s, free.pick === s) : cardHtml(i, { fslot: s, plus: fs.plusBySlot[s], picking: free.pick === s, showAce: true })).join('');
+  const full = free.slots.every(x => x != null);
+  let picker = '';
+  if (free.pick != null) {
+    const pos = SLOTS[free.pick], q = free.q.trim().toLowerCase();
+    const others = free.slots.filter((_, s) => s !== free.pick);
+    const otherNames = others.filter(x => x != null).map(j => D.players[j].n);
+    let list = Object.keys(save.own).map(Number).filter(i => D.players[i] && D.players[i].p === pos && !otherNames.includes(D.players[i].n));
+    const ownN = list.length;
+    list = list.filter(i => { const p = D.players[i], t = teamById[p.t];
+      if (free.conf && t.c !== free.conf) return false;
+      if (q && !(p.n.toLowerCase().includes(q) || t.a.toLowerCase() === q || String(t.y) === q || t.n.toLowerCase().includes(q))) return false;
+      return true; });
+    const by = { star: (a, b) => D.players[b].s - D.players[a].s || D.players[b].pts - D.players[a].pts,
+      pts: (a, b) => D.players[b].pts - D.players[a].pts, year: (a, b) => teamById[D.players[b].t].y - teamById[D.players[a].t].y || D.players[b].s - D.players[a].s };
+    list.sort(by[free.sort]);
+    const total = list.length; list = list.slice(0, free.limit);
+    picker = `<div class="panel" id="picker">
+      <div class="picker-h"><b>${pos} 선택</b><small>도감 보유 ${ownN}명</small></div>
+      <div class="filters" style="margin-top:10px">
+        <input type="search" id="fr-q" placeholder="이름, 팀(GSW), 시즌(2016)" value="${esc(free.q)}" aria-label="선수 검색">
+        <select id="fr-conf" aria-label="컨퍼런스"><option value="">전체</option><option value="E" ${free.conf === 'E' ? 'selected' : ''}>EAST</option><option value="W" ${free.conf === 'W' ? 'selected' : ''}>WEST</option></select>
+      </div>
+      <div class="filters" style="margin-top:8px"><div class="seg">${[['star', '등급순'], ['pts', '득점순'], ['year', '최신순']].map(([k, l]) => `<button data-act="frsort-${k}" class="${free.sort === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        ${free.slots[free.pick] != null ? '<button class="btn" data-act="frclear" style="padding:6px 10px;font-size:12px">이 자리 비우기</button>' : ''}<span class="count">${total}명</span></div>
+      ${ownN ? `<div class="grid3" style="margin-top:10px">${list.map(i => cardHtml(i, { pickId: i, showAce: true })).join('')}</div>` : `<p class="empty-note">아직 도감에 ${pos} 선수가 없습니다. 드래프트로 먼저 모아 보세요.</p>`}
+      ${total > list.length ? `<button class="btn more" data-act="frmore" style="width:100%;margin-top:10px">더 보기 (${total - list.length}명 남음)</button>` : ''}
+    </div>`;
+  }
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="home">← 메인</button><h2>Free Mode</h2><div class="side">${free.slots.filter(x => x != null).length} / 5</div></div>
+    <div class="row2"><button class="btn primary" data-act="frconfirm" ${full ? '' : 'disabled'}>이 팀으로 확정</button><button class="btn" data-act="frreset">모두 비우기</button></div>
+    <div class="panel">
+      <div class="score-h"><div><div class="eyebrow">Free Mode · 도감 선수로 구성</div><div class="big">팀 점수<b>${fs.score}</b></div></div><small>자리를 탭해 선수 고르기</small></div>
+      <div class="board" style="margin-top:10px">${board}</div>
+    </div>
+    ${fs.syn && full ? synPanel(fs.syn) : ''}
+    ${picker}
+  </div>`;
+}
+function freeConfirm() {
+  if (!free.slots.every(x => x != null)) return;
+  draft = { slots: free.slots.slice(), held: [0, 0, 0, 0, 0], left: 0, isNew: [0, 0, 0, 0, 0], flip: [0, 0, 0, 0, 0], done: true, free: true, date: new Date() };
+  go('roster');
+}
+
 /* ---------- tournament ---------- */
 let tour = null;
 function teamScore(t) { return t.p.reduce((s, i) => s + D.players[i].s, 0) + (t.r === 'C' ? 5 : 0); }
 function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(() => t.r === 'C' ? 1 : 0), score: teamScore(t), team: t }; }
 function startTour() {
   const syn = synergy(draft.slots);
-  const me = { me: true, name: 'MY DREAM TEAM', sub: 'PLAYER · ' + (syn.legend ? 'LEGENDARY' : syn.score >= 24 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
+  const me = { me: true, name: 'MY DREAM TEAM', sub: (draft.free ? 'FREE MODE · ' : 'PLAYER · ') + (syn.legend ? 'LEGENDARY' : syn.score >= 24 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
   const by = r => D.teams.filter(t => r.includes(t.r));
   const used = new Set(draft.slots.map(i => D.players[i].t));
   const take = (arr) => { let t; do { t = pick(arr); } while (used.has(t.id)); used.add(t.id); return makeOpp(t); };
@@ -483,6 +579,7 @@ function nextRound() {
   render(); window.scrollTo(0, 0);
 }
 function onChampion() {
+  if (draft.free) return;
   save.titles = (save.titles || 0) + 1; persist();
   unlockAch('title');
   if (tour.sweeps) unlockAch('sweep');
@@ -543,6 +640,7 @@ function vMain() {
     <div class="hero">${ICON_BALL}<div class="kicker">NBA PLAYOFFS CARD DRAFT</div><h1>Playoff<br>Draft</h1>
       <p>2015–2025 플레이오프 진출 ${G}팀의 주전으로 5인 드림팀을 완성하세요.</p></div>
     <button class="btn primary big" data-act="start">드래프트 시작</button>
+    <button class="btn big" data-act="free">자유 모드 <small style="color:var(--mute);font-weight:500">· 도감 선수 ${n}명으로 구성</small></button>
     <div class="panel carousel">
       <div class="slide" data-act="open-${s[0]}" role="button" tabindex="0">
         <div class="ico">${icons[s[0]]}</div>
@@ -553,10 +651,11 @@ function vMain() {
     </div>
     <div class="car-nav"><button data-act="car--1" aria-label="이전">‹</button><div class="dots">${slides.map((_, k) => `<i class="${k === carIdx ? 'on' : ''}"></i>`).join('')}</div><button data-act="car-1" aria-label="다음">›</button></div>
     <div class="rules">
-      <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>3성 50% · 4성 40% · 5성 10%</small></div>
+      <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
       <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%, 같은 팀 3명이 모이면 +15%p).</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
       <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 6성)</p></div>
       <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급: 우승 5성 · 파이널/컨퍼런스 파이널 4성 · 2라운드/1라운드 3성 · 플레이오프 평균 25점 이상(또는 팀 내 최다 득점 22점 이상) 에이스 +1성</small></div>
+      <div class="panel"><b>5. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
     </div>
     <footer>선수 기록: Basketball-Reference 플레이오프 경기당 기록(선발 출전 상위 5명).<br>NBA 및 각 구단과 관계없는 팬 제작 게임입니다.</footer>
   </div>`;
@@ -565,7 +664,8 @@ function vMain() {
 function vDraft() {
   const syn = synergy(draft.slots), h = rerollHint();
   const pips = [0, 1, 2].map(k => `<i class="${k < draft.left ? 'on' : ''}"></i>`).join('');
-  const board = draft.slots.map((i, s) => cardHtml(i, { slot: s, held: draft.held[s], isNew: draft.isNew[s], plus: syn.plus[s], flip: draft.flip[s], showAce: true })).join('');
+  const board = draft.slots.map((i, s) => cardHtml(i, { slot: s, held: draft.held[s], isNew: draft.isNew[s], plus: syn.plus[s], flip: draft.flip[s], gold: draft.flip[s] && D.players[i].s >= 5, showAce: true })).join('');
+  draft.celebrate = draft.slots.filter((i, s) => draft.flip[s] && D.players[i].s >= 5);
   draft.flip = [0, 0, 0, 0, 0];
   let hint = '';
   if (h) { const t = teamById[h.team]; hint = `<p class="hint">다음 리롤: 슬롯마다 ${Math.round(h.p * 100)}% 확률로 <b>${t.y} ${t.a}</b> 선수 등장${h.n >= 3 ? ` (${h.n + 1}명 집결 확률 UP!)` : ''}</p>`; }
@@ -591,7 +691,8 @@ function vRoster(ids, isShared) {
     <div class="bar"><button class="back" data-act="home">← 메인</button><h2>Final Roster</h2><div class="side"></div></div>
     ${isShared ? `<div class="panel"><b>친구가 공유한 로스터</b><p style="margin:4px 0 0;color:var(--mute)">같은 다섯 명으로 토너먼트를 치르거나 직접 드래프트해 보세요.</p></div>` : ''}
     <div class="row2"><button class="btn primary" data-act="tour">올타임 플레이오프</button><button class="btn" data-act="img">이미지 저장</button></div>
-    <div class="row2"><button class="btn" data-act="share">링크 공유</button><button class="btn" data-act="start">다시 드래프트</button></div>
+    <div class="row2"><button class="btn" data-act="share">링크 공유</button>${draft.free ? '<button class="btn" data-act="free-edit">다시 구성</button>' : '<button class="btn" data-act="start">다시 드래프트</button>'}</div>
+    ${draft.free ? '<div><span class="mode-tag">FREE MODE</span> <small style="color:var(--mute)">자유 모드 우승은 업적에 들어가지 않습니다.</small></div>' : ''}
     <div class="panel">
       <div class="score-h"><div><div class="eyebrow">Final Roster</div><div class="big">팀 점수<b>${syn.score}</b></div></div><small>${fmtDate(draft && draft.date || new Date())}</small></div>
       <div class="board" style="margin-top:10px">${board}</div>
@@ -613,7 +714,7 @@ function vTour() {
   let ctl;
   if (!L) ctl = `<div class="panel" style="text-align:center;color:var(--mute)">경기 시작을 누르면 7전 4선승 시리즈가 한 경기씩 진행됩니다.</div><button class="btn primary big" data-act="play">${STAGE[st]} 시리즈 시작 (Bo7)</button>`;
   else if (!L.done) ctl = `<button class="btn big" data-act="skip">결과 바로 보기 ⏭</button>`;
-  else if (tour.champion) ctl = `<div class="panel result"><h3>올타임 챔피언!</h3><p>역대 플레이오프 최강 로스터들을 모두 꺾고 정상에 올랐습니다.</p></div><button class="btn primary big" data-act="start">다시 드래프트하기</button>`;
+  else if (tour.champion) ctl = `<div class="panel result"><h3>올타임 챔피언!</h3><p>역대 플레이오프 최강 로스터들을 모두 꺾고 정상에 올랐습니다.</p></div><button class="btn primary big" data-act="${draft.free ? 'free-edit' : 'start'}">${draft.free ? '다시 구성하기' : '다시 드래프트하기'}</button>`;
   else if (tour.over) ctl = `<div class="panel result lost"><h3>${STAGE[st]} 탈락</h3><p>${esc(B.name)}에 ${a}-${b}로 졌습니다.</p></div><div class="row2"><button class="btn" data-act="back-roster">로스터 보기</button><button class="btn primary" data-act="start">다시 드래프트</button></div>`;
   else ctl = `<button class="btn primary big" data-act="next">${STAGE[st + 1]} 진출! 다음 라운드 →</button>`;
   return `<div class="screen">
@@ -719,6 +820,29 @@ function vAch() {
   </div>`;
 }
 
+function celebrate(ids) {
+  if (!ids || !ids.length) return;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cards = [...$app.querySelectorAll('.card.gold')];
+  const b = document.createElement('div'); b.className = 'burst'; b.setAttribute('aria-hidden', 'true');
+  let h = '';
+  const spots = cards.length ? cards.map(c => { const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }) : [[innerWidth / 2, innerHeight / 2]];
+  const [x0, y0] = spots[0];
+  h += `<div class="flash" style="--x:${x0}px;--y:${y0}px"></div>`;
+  const cols = ['#ffc83d', '#ffe9a6', '#ff8a1f', '#fff', '#4ff0ff'];
+  spots.forEach(([x, y]) => {
+    h += `<div class="ring" style="--x:${x}px;--y:${y}px"></div>`;
+    if (!reduce) for (let k = 0; k < 26; k++) {
+      const a = Math.random() * Math.PI * 2, d = 80 + Math.random() * 160;
+      h += `<i class="spark" style="--x:${x}px;--y:${y}px;--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--r:${rnd(540)}deg;--c:${pick(cols)};animation-delay:${Math.random() * .15}s"></i>`;
+    }
+  });
+  const names = ids.map(i => D.players[i].n);
+  h += `<div class="label">${ids.length > 1 ? '★5 × ' + ids.length : '★★★★★'}<small>${esc(names.join(' · '))}</small></div>`;
+  b.innerHTML = h; document.body.appendChild(b);
+  try { navigator.vibrate && navigator.vibrate([40, 40, 80]); } catch (e) {}
+  setTimeout(() => b.remove(), 1700);
+}
 function render() {
   let h = '';
   if (view === 'main') h = vMain();
@@ -728,7 +852,9 @@ function render() {
   else if (view === 'dex') h = vDex();
   else if (view === 'gal') h = vGal();
   else if (view === 'ach') h = vAch();
+  else if (view === 'free') h = vFree();
   $app.innerHTML = h;
+  if (view === 'draft' && draft.celebrate && draft.celebrate.length) { const c = draft.celebrate; draft.celebrate = null; requestAnimationFrame(() => celebrate(c)); }
 }
 
 /* ---------- image & share ---------- */
@@ -797,6 +923,13 @@ function act(a) {
   else if (a === 'skip') skipGames();
   else if (a === 'next') nextRound();
   else if (a === 'back-roster') go('roster');
+  else if (a === 'free') startFree(false);
+  else if (a === 'free-edit') { free.slots = draft.slots.slice(); startFree(true); free.pick = null; render(); }
+  else if (a === 'frconfirm') freeConfirm();
+  else if (a === 'frreset') startFree(false);
+  else if (a === 'frclear') { free.slots[free.pick] = null; render(); }
+  else if (a === 'frmore') { free.limit += 45; render(); }
+  else if (a.startsWith('frsort-')) { free.sort = a.slice(7); free.limit = 45; render(); }
   else if (a.startsWith('open-')) go(a.slice(5));
   else if (a.startsWith('car-')) { carIdx = (carIdx + Number(a.slice(4)) + 3) % 3; render(); }
   else if (a.startsWith('dexown-')) { dexF.own = a.slice(7); dexF.limit = 60; render(); }
@@ -807,17 +940,33 @@ function act(a) {
 $app.addEventListener('click', e => {
   const card = e.target.closest('[data-slot]');
   if (card && view === 'draft') { const s = +card.dataset.slot; draft.held[s] = draft.held[s] ? 0 : 1; render(); return; }
+  const pk = e.target.closest('[data-pick]');
+  if (pk && view === 'free') {
+    free.slots[free.pick] = +pk.dataset.pick;
+    const nx = free.slots.findIndex(x => x == null); free.pick = nx < 0 ? null : nx; free.q = ''; free.limit = 45;
+    render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
+  }
+  const fsl = e.target.closest('[data-fslot]');
+  if (fsl && view === 'free') { const s = +fsl.dataset.fslot; free.pick = free.pick === s ? null : s; free.limit = 45; render();
+    const pe = document.getElementById('picker'); if (pe && free.pick != null) pe.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   const b = e.target.closest('[data-act]'); if (b) act(b.dataset.act);
 });
 $app.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
-  const el = e.target.closest('[data-slot],[data-act]'); if (el && el.tagName !== 'BUTTON') { e.preventDefault(); el.click(); }
+  const el = e.target.closest('[data-slot],[data-act],[data-fslot],[data-pick]'); if (el && el.tagName !== 'BUTTON') { e.preventDefault(); el.click(); }
 });
 $app.addEventListener('change', e => {
   const id = e.target.id, v = e.target.value;
   if (id === 'f-pos') dexF.pos = v; else if (id === 'f-conf') dexF.conf = v; else if (id === 'f-season') dexF.season = v;
+  else if (id === 'fr-conf') { free.conf = v; free.limit = 45; render(); return; }
   else if (id === 'g-conf') galF.conf = v; else if (id === 'g-res') galF.res = v; else return;
   dexF.limit = 60; galF.limit = 20; render();
+});
+$app.addEventListener('input', e => {
+  if (e.target.id !== 'fr-q') return;
+  free.q = e.target.value; free.limit = 45;
+  const pos = e.target.selectionStart; render();
+  const inp = document.getElementById('fr-q'); if (inp) { inp.focus(); try { inp.setSelectionRange(pos, pos); } catch (er) {} }
 });
 window.addEventListener('hashchange', () => { if (loadHash()) render(); });
 loadHash();
