@@ -414,8 +414,10 @@ function rerollHint() {
   if (!best || best[1] < (heldIds.length ? 1 : 2)) return null;
   const n = all[best[0]];
   if (n >= 5) return null;
-  const p = 0.1 * (used + 1) + (n >= 3 ? 0.15 : 0);
-  return { team: best[0], p, n };
+  const hc = draft.slots.filter((i, k) => draft.held[k] && D.players[i].t === best[0]).length;
+  const parts = [0.1 * (used + 1), 0.15 * hc, n >= 3 ? 0.15 : 0];
+  const p = Math.min(0.85, parts[0] + parts[1] + parts[2]);
+  return { team: best[0], p, n, hc, parts };
 }
 function reroll() {
   if (draft.left <= 0) return;
@@ -652,7 +654,7 @@ function vMain() {
     <div class="car-nav"><button data-act="car--1" aria-label="이전">‹</button><div class="dots">${slides.map((_, k) => `<i class="${k === carIdx ? 'on' : ''}"></i>`).join('')}</div><button data-act="car-1" aria-label="다음">›</button></div>
     <div class="rules">
       <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
-      <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%, 같은 팀 3명이 모이면 +15%p).</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
+      <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%). 그 팀 카드를 홀드하면 장당 +15%p, 같은 팀 3명이 모이면 +15%p 더 붙습니다(최대 85%).</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
       <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 6성)</p></div>
       <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급: 우승 5성 · 파이널/컨퍼런스 파이널 4성 · 2라운드/1라운드 3성 · 플레이오프 평균 25점 이상(또는 팀 내 최다 득점 22점 이상) 에이스 +1성</small></div>
       <div class="panel"><b>5. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
@@ -668,7 +670,7 @@ function vDraft() {
   draft.celebrate = draft.slots.filter((i, s) => draft.flip[s] && D.players[i].s >= 5);
   draft.flip = [0, 0, 0, 0, 0];
   let hint = '';
-  if (h) { const t = teamById[h.team]; hint = `<p class="hint">다음 리롤: 슬롯마다 ${Math.round(h.p * 100)}% 확률로 <b>${t.y} ${t.a}</b> 선수 등장${h.n >= 3 ? ` (${h.n + 1}명 집결 확률 UP!)` : ''}</p>`; }
+  if (h) { const t = teamById[h.team]; hint = `<p class="hint">다음 리롤: 슬롯마다 ${Math.round(h.p * 100)}% 확률로 <b>${t.y} ${t.a}</b> 선수 등장${h.n >= 3 ? ` (${h.n + 1}명 집결 확률 UP!)` : ''}<br><small style="color:var(--mute)">리롤 ${Math.round(h.parts[0] * 100)}%${h.hc ? ` + 홀드 ${h.hc}장 ${Math.round(h.parts[1] * 100)}%p` : ' · 이 팀 카드를 홀드하면 장당 +15%p'}${h.parts[2] ? ` + 3명 집결 15%p` : ''}${h.p >= 0.85 ? ' (최대 85%)' : ''}</small></p>`; }
   return `<div class="screen">
     <div class="bar"><button class="back" data-act="home">← 메인</button><h2>Draft</h2><div class="side">리롤 <span class="pips">${pips}</span></div></div>
     <div class="row2"><button class="btn primary" data-act="reroll" ${draft.left ? '' : 'disabled'}>리롤 (${draft.left}회 남음)</button><button class="btn" data-act="confirm">이 팀으로 확정</button></div>
