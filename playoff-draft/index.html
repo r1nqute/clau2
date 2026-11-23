@@ -587,8 +587,9 @@ function freeConfirm() {
 
 /* ---------- tournament ---------- */
 let tour = null;
-function teamScore(t) { return t.p.reduce((s, i) => s + D.players[i].s, 0) + (t.r === 'C' ? 5 : 0); }
-function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(() => t.r === 'C' ? 1 : 0), score: teamScore(t), team: t, style: topStyles(t.st)[0] }; }
+const OPP_CHEM = 2, CHAMP_BONUS = 1; // every real roster plays with chemistry (+2 per player); champions +1 more per player
+function teamScore(t) { return t.p.reduce((s, i) => s + Math.min(MAXS, D.players[i].s + OPP_CHEM + (t.r === 'C' ? CHAMP_BONUS : 0)), 0); }
+function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(i => Math.min(MAXS, D.players[i].s + OPP_CHEM + (t.r === 'C' ? CHAMP_BONUS : 0)) - D.players[i].s), score: teamScore(t), team: t, style: topStyles(t.st)[0] }; }
 function startTour() {
   const syn = synergy(draft.slots);
   const me = { me: true, name: 'MY DREAM TEAM', sub: (draft.free ? 'FREE MODE · ' : 'PLAYER · ') + (syn.legend ? 'LEGENDARY' : syn.score >= 35 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
@@ -596,7 +597,7 @@ function startTour() {
   const by = r => D.teams.filter(t => r.includes(t.r));
   const used = new Set(draft.slots.map(i => D.players[i].t));
   const take = (arr) => { let t; do { t = pick(arr); } while (used.has(t.id)); used.add(t.id); return makeOpp(t); };
-  const opps = [take(by(['C'])), take(by(['C', 'F'])), take(by(['F', 'CF'])), take(by(['CF', 'R2'])), take(by(['R2', 'R1'])), take(by(['R1', 'R2'])), take(by(['R1']))];
+  const opps = [take(by(['C'])), take(by(['C'])), take(by(['C', 'F'])), take(by(['F', 'CF'])), take(by(['CF'])), take(by(['CF', 'R2'])), take(by(['R2', 'R1']))];
   opps.sort((a, b) => a.score - b.score);
   // me vs weakest; strongest two in the other half
   const order = [me, opps[0], opps[3], opps[2], opps[1], opps[6], opps[4], opps[5]];
@@ -732,7 +733,7 @@ function vMain() {
       <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
       <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%). 그 팀 카드를 홀드하면 장당 +15%p, 같은 팀 3명이 모이면 +15%p 더 붙습니다(최대 85%).</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
       <div class="panel"><b>3. 시너지</b><p>공통점이 겹친 카드마다 별이 붙습니다(최대 10성).<br>· 같은 팀·같은 시즌: <span class="hl3">2장 +1</span>, 3~4장 +2, 5장 <span class="hl6">레전더리</span> +3<br>· 같은 프랜차이즈(다른 시즌): 2장 이상 +1, 5장 <span class="hl4">프레스티지</span> +2<br>· 같은 시즌의 다른 팀 카드와 겹치면 +1<br>· 같은 컨퍼런스 4장 이상 +1</p></div>
-      <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급(1~10성): 그 시즌 플레이오프 경기당 기록으로 매깁니다. 득점(슈팅 효율 반영)·리바운드·어시스트·스틸·블록·턴오버를 합친 점수를 같은 포지션 176명 중 순위로 나눠, 상위 2%가 10성입니다.</small></div>
+      <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승. 상대는 우승팀 둘을 포함한 강팀 위주이고, 실제 동료끼리 뛰는 팀이라 <span class="hl3">팀 케미 +2성</span>(우승팀은 +3성)을 받습니다.</p><small>카드 등급(1~10성): 그 시즌 플레이오프 경기당 기록으로 매깁니다. 득점(슈팅 효율 반영)·리바운드·어시스트·스틸·블록·턴오버를 합친 점수를 같은 포지션 176명 중 순위로 나눠, 상위 2%가 10성입니다.</small></div>
       <div class="panel"><b>5. 전술과 상성</b><p>팀마다 그 시즌 기록(페이스, 3점 시도 비율, 자유투·공격 리바운드, 수비 효율, 어시스트 비율, 에이스 득점 비중)으로 전술이 정해집니다. 상성이 유리하면 팀 점수 +${COUNTER}로 계산해서, 점수가 낮은 팀도 강팀을 잡을 수 있습니다.</p>${ringHtml()}<small>내 팀은 카드의 원래 팀 기록으로 주·보조 전술 두 가지를 갖고, 시리즈마다 하나를 고릅니다.</small></div>
       <div class="panel"><b>6. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
     </div>
@@ -789,6 +790,7 @@ function teamBlock(T, isMe, vs) {
   const ico = isMe ? `<div class="ico" style="background:var(--accent)"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l3 7 7 .6-5.3 4.7L18.4 22 12 18l-6.4 4 1.7-7.7L2 9.6 9 9z" fill="#1a0d00"/></svg></div>`
     : `<div class="ico" style="background:${(COLORS[T.abbr] || ['#333'])[0]}">${smallJersey(T.abbr)}</div>`;
   return `<div class="team ${isMe ? 'me' : ''}"><div class="head">${ico}<div class="ttl"><small>${esc(T.sub)}</small><b>${esc(T.name)}</b></div><div class="sc"><small>SCORE</small><b>${T.score}</b></div></div>
+    ${!isMe && T.team ? `<div class="stl"><small style="color:var(--mute)">팀 케미 +${OPP_CHEM}성${T.team.r === 'C' ? ` · 우승 경험 +${CHAMP_BONUS}성` : ''} (최대 10성)</small></div>` : ''}
     ${T.style ? `<div class="stl">${styChip(T.style)}${vs && vs.style ? advChip(advOf(T.style, vs.style)) : ''}<small style="color:var(--mute)">${STY[T.style].d}</small></div>` : ''}
     <ul>${T.ids.map((i, k) => { const p = D.players[i]; return `<li><span class="p">${p.p}</span><span class="n">${esc(p.n)}</span>${starsHtml(p.s, T.plus[k])}</li>`; }).join('')}</ul></div>`;
 }
