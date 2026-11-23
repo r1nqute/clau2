@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="ko">
+<title>Playoff Draft</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap">
+<style>
+/* Layout: one phone-width column, arena-dark ground, hardwood-orange as the single loud colour. */
+:root {
+  --bg: #0a0e16;
+  --panel: #121926;
+  --panel2: #18212f;
+  --line: #263044;
+  --fg: #eef2f8;
+  --mute: #8592a8;
+  --dim: #4a5568;
+  --accent: #ff8a1f;
+  --accent-ink: #1a0d00;
+  --hold: #35d6ff;
+  --t3: #b9c2d0;
+  --t4: #a982ff;
+  --t5: #ffc83d;
+  --t6: #4ff0ff;
+  --east: #2a5bd7;
+  --east2: #173a8f;
+  --west: #e04f35;
+  --west2: #9c2e1c;
+  --win: #ffb547;
+  --f-display: 'Black Han Sans', 'Noto Sans KR', system-ui, sans-serif;
+  --f-body: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+  --f-num: 'Oswald', 'Noto Sans KR', system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  margin: 0; color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 40px;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--hold); outline-offset: 2px; }
+.wrap { max-width: 480px; margin: 0 auto; }
+.screen { display: flex; flex-direction: column; gap: 14px; padding-top: 12px; }
+
+/* top bar */
+.bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 44px; position: sticky; top: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.bar .back { justify-self: start; background: none; border: 0; color: var(--mute); padding: 8px 0; font-size: 13px; }
+.bar h2 { margin: 0; font-family: var(--f-num); font-size: 18px; letter-spacing: .06em; text-transform: uppercase; }
+.bar .side { justify-self: end; font-size: 12px; color: var(--mute); display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.pips { display: flex; gap: 4px; }
+.pips i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.pips i.on { background: var(--accent); }
+
+.btn { border: 0; border-radius: 10px; padding: 12px 10px; font-weight: 700; font-size: 14px; background: var(--panel2); color: var(--fg); border: 1px solid var(--line); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.big { padding: 16px; font-size: 16px; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.eyebrow { font-size: 11px; letter-spacing: .14em; color: var(--mute); text-transform: uppercase; font-weight: 700; }
+
+/* HERO */
+.hero { text-align: center; padding: 28px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hero .kicker { font-family: var(--f-num); letter-spacing: .32em; color: var(--accent); font-size: 13px; }
+.hero h1 { margin: 0; font-family: var(--f-num); font-weight: 700; font-size: clamp(44px, 14vw, 64px); line-height: .95; letter-spacing: .01em; text-transform: uppercase;
+  background: linear-gradient(180deg, #ffd08a 0%, var(--accent) 55%, #d55a00 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p { margin: 4px 0 0; color: var(--mute); }
+.hero svg { width: 64px; height: 64px; }
+
+.carousel .slide { display: flex; align-items: center; gap: 12px; }
+.carousel .ico { width: 40px; height: 40px; border-radius: 10px; background: var(--panel2); display: grid; place-items: center; flex: none; }
+.carousel .txt { flex: 1; min-width: 0; }
+.carousel .txt b { display: block; font-size: 15px; }
+.carousel .txt small { color: var(--mute); }
+.carousel .num { text-align: right; font-family: var(--f-num); color: var(--accent); font-size: 16px; font-variant-numeric: tabular-nums; }
+.carousel .num small { display: block; color: var(--mute); font-size: 11px; }
+.progress { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 12px; }
+.progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #ff4fa3); }
+.car-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.car-nav button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel2); }
+.car-nav .dots { display: flex; gap: 6px; }
+.car-nav .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--dim); transition: width .2s; }
+.car-nav .dots i.on { width: 20px; background: var(--accent); }
+
+.rules { display: flex; flex-direction: column; gap: 10px; }
+.rules .panel b { display: block; margin-bottom: 4px; }
+.rules .panel p { margin: 0; color: #c9d1de; }
+.rules .panel small { color: var(--mute); display: block; margin-top: 4px; }
+.hl3 { color: #4ee3a0; } .hl4 { color: var(--t4); } .hl5 { color: var(--t5); } .hl6 { color: #ff5c7a; }
+footer { color: var(--dim); font-size: 11px; text-align: center; padding: 18px 0 0; line-height: 1.6; }
+
+/* PLAYER CARD */
+.board { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.board > .card { grid-column: span 2; }
+.board > .card:nth-child(4) { grid-column: 2 / span 2; }
+.card { position: relative; border-radius: 12px; padding: 6px 6px 8px; background: var(--panel2); border: 2px solid #34405a; display: flex; flex-direction: column; gap: 4px; min-width: 0; user-select: none; transition: transform .15s, box-shadow .2s; }
+.card.t4 { border-color: var(--t4); }
+.card.t5 { border-color: var(--t5); }
+.card.t6 { border-color: var(--t6); box-shadow: 0 0 14px rgba(79,240,255,.5); }
+.card.held { box-shadow: 0 0 0 2px var(--hold), 0 0 18px rgba(53,214,255,.55); }
+.card.syn { background: linear-gradient(160deg, #1c2b3a, #142030); }
+.card.flip { animation: flip .45s ease; }
+@keyframes flip { 0% { transform: rotateY(90deg) scale(.96); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .card.flip { animation: none; } }
+.card .hd { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; letter-spacing: .06em; }
+.card .hd .cf { color: var(--mute); }
+.card .art { position: relative; border-radius: 8px; aspect-ratio: 4/5; display: grid; place-items: center; overflow: hidden; max-width: 100%; }
+.card .art.E { background: linear-gradient(170deg, var(--east), var(--east2)); }
+.card .art.W { background: linear-gradient(170deg, var(--west), var(--west2)); }
+.card .art svg { width: 78%; height: auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+.card .badges { position: absolute; top: 4px; left: 4px; display: flex; gap: 3px; flex-wrap: wrap; }
+.badge { font-size: 9px; font-weight: 900; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; }
+.badge.new { background: var(--accent); color: var(--accent-ink); }
+.badge.hold { background: var(--hold); color: #002330; }
+.badge.ace { background: #ff4f7b; color: #fff; }
+.card .nm { font-weight: 900; font-size: 12px; line-height: 1.2; letter-spacing: -.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.4em; overflow-wrap: anywhere; }
+.card .mt { font-size: 10px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stars { font-size: 11px; letter-spacing: 1px; white-space: nowrap; line-height: 1; }
+.stars.s3 { color: var(--t3); } .stars.s4 { color: var(--t4); } .stars.s5 { color: var(--t5); }
+.stars .plus { color: var(--t6); font-weight: 900; font-size: 10px; margin-left: 2px; }
+.card.unknown .art { background: #141b27 !important; }
+.card.unknown .art::after { content: "?"; font-family: var(--f-num); font-size: 28px; color: #2c3647; }
+.card.unknown .nm, .card.unknown .mt, .card.unknown .stars { color: var(--dim); }
+
+.score-h { display: flex; justify-content: space-between; align-items: end; }
+.score-h .big { font-family: var(--f-display); font-size: 24px; }
+.score-h .big b { color: var(--accent); font-family: var(--f-num); font-size: 26px; margin-left: 4px; }
+.score-h small { color: var(--mute); font-size: 11px; }
+
+.syn h3 { margin: 0 0 4px; font-size: 18px; font-family: var(--f-num); letter-spacing: .04em; }
+.syn h3.legend { color: var(--t5); }
+.syn h3.part { color: #4ee3a0; }
+.syn p { margin: 0 0 6px; color: #c9d1de; }
+.syn .hint { color: var(--hold); font-size: 13px; }
+.syn .hint b { color: var(--t5); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-size: 12px; color: #c9d1de; font-variant-numeric: tabular-nums; }
+.chip.on { border-color: #4ee3a0; color: #4ee3a0; }
+
+.toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%); z-index: 50; background: #241a0b; border: 1px solid var(--accent); color: var(--fg); padding: 6px 12px 6px 6px; border-radius: 999px; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.5); animation: drop .3s ease; max-width: calc(100vw - 32px); }
+.toast .tag { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 900; letter-spacing: .06em; white-space: nowrap; }
+.toast.ach { background: #1d1430; border-color: var(--t4); }
+.toast.ach .tag { background: var(--t4); color: #160a33; }
+@keyframes drop { from { transform: translate(-50%, -20px); opacity: 0; } }
+
+/* roster rows (tournament) */
+.team { border-radius: 14px; border: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.team.me { border-color: var(--accent); }
+.team .head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: linear-gradient(120deg, var(--panel2), var(--panel)); }
+.team .head .ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.team .head .ttl { flex: 1; min-width: 0; }
+.team .head .ttl small { color: var(--accent); font-size: 11px; font-weight: 900; letter-spacing: .1em; display: block; }
+.team .head .ttl b { font-family: var(--f-num); font-size: 20px; letter-spacing: .02em; display: block; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.team .head .sc { text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 2px 10px; background: var(--bg); }
+.team .head .sc small { font-size: 9px; color: var(--mute); display: block; letter-spacing: .1em; }
+.team .head .sc b { font-family: var(--f-num); font-size: 20px; color: var(--accent); }
+.team ul { list-style: none; margin: 0; padding: 4px 14px 10px; }
+.team li { display: grid; grid-template-columns: 30px 1fr auto; gap: 6px; padding: 5px 0; border-bottom: 1px solid #1c2534; align-items: center; font-size: 13px; }
+.team li:last-child { border-bottom: 0; }
+.team li .p { color: var(--mute); font-size: 11px; font-weight: 700; }
+.team li .n { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.series { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; }
+.series .lbl { font-size: 11px; color: var(--mute); letter-spacing: .2em; }
+.series b { font-family: var(--f-num); font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.series b.lead { color: var(--accent); }
+.games { display: flex; flex-direction: column; gap: 6px; }
+.game { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 10px; font-size: 12px; animation: drop .25s ease; }
+.game.opp { border-left-color: var(--hold); }
+.game .g { background: var(--panel2); border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 900; color: var(--mute); white-space: nowrap; }
+.game .w { font-weight: 900; color: var(--accent); white-space: nowrap; }
+.game.opp .w { color: var(--hold); }
+.game .d { color: #c9d1de; min-width: 0; }
+.result { text-align: center; border: 1px solid var(--accent); background: linear-gradient(160deg, #2a1a07, #161009); }
+.result.lost { border-color: var(--line); background: var(--panel); }
+.result h3 { margin: 0; font-family: var(--f-display); font-size: 24px; color: var(--t5); }
+.result.lost h3 { color: var(--mute); }
+.result p { margin: 4px 0 0; color: #c9d1de; }
+.stage-tag { display: inline-flex; background: #2a1d08; color: var(--t5); border: 1px solid #5a3d0e; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+
+.bracket h4 { margin: 12px 0 6px; font-size: 13px; color: var(--mute); }
+.bracket h4.fin { color: var(--accent); }
+.match { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
+.match.mine { border-color: var(--accent); }
+.match div { display: flex; justify-content: space-between; padding: 6px 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.match div + div { border-top: 1px solid #1c2534; }
+.match .w { font-weight: 900; }
+.match .l { color: var(--mute); }
+.match .tbd { color: var(--dim); }
+.match .me { color: var(--accent); }
+
+/* filters & grids */
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+select { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; }
+.seg { display: inline-flex; background: var(--panel2); border-radius: 8px; padding: 3px; border: 1px solid var(--line); }
+.seg button { background: none; border: 0; padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--mute); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 900; }
+.count { margin-left: auto; color: var(--mute); font-size: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.more { text-align: center; }
+
+.gcard { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+.gcard .ban { position: relative; padding: 14px; display: flex; align-items: center; gap: 12px; min-height: 92px; }
+.gcard .ban .bigab { position: absolute; right: 10px; top: 0; font-family: var(--f-num); font-size: 78px; line-height: 1; opacity: .16; font-weight: 700; }
+.gcard .ban .ico { width: 46px; height: 46px; border-radius: 12px; background: rgba(0,0,0,.35); display: grid; place-items: center; flex: none; }
+.gcard .ban .meta { flex: 1; min-width: 0; position: relative; }
+.gcard .ban .meta small { font-size: 11px; font-weight: 700; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.gcard .ban .meta b { font-family: var(--f-num); font-size: 22px; display: block; line-height: 1.1; }
+.gcard .ban .cnt { position: absolute; right: 10px; top: 10px; font-size: 11px; background: rgba(0,0,0,.45); border-radius: 6px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+.gcard .ban .done { position: absolute; right: 10px; bottom: 10px; background: #2a1d08; color: var(--t5); border: 1px solid var(--t5); border-radius: 999px; font-size: 10px; font-weight: 900; padding: 1px 8px; letter-spacing: .06em; }
+.gcard .desc { margin: 0; padding: 10px 14px; color: #c9d1de; font-size: 13px; }
+.gcard .ros { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 0 10px 12px; }
+.gcard .ros div { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 3px 2px; min-width: 0; }
+.gcard .ros small { display: block; font-size: 9px; color: var(--mute); font-weight: 700; }
+.gcard .ros b { display: block; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gcard .ros div.no b { color: var(--dim); font-weight: 400; }
+
+.ach { display: flex; gap: 12px; align-items: center; }
+.ach .medal { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--panel2); border: 2px solid var(--line); font-family: var(--f-num); color: var(--dim); flex: none; }
+.ach.on .medal { border-color: var(--t5); color: var(--t5); background: #2a1d08; }
+.ach b { display: block; }
+.ach small { color: var(--mute); }
+.ach.off b { color: var(--mute); }
+
+.modal { position: fixed; inset: 0; background: rgba(4,6,10,.86); z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+.modal img { max-height: 70vh; max-width: 100%; border-radius: 12px; }
+.modal p { color: var(--mute); margin: 0; text-align: center; }
+</style>
+
+<div class="wrap" id="app"></div>
+<script src="data.js"></script>
+<script>
+'use strict';
+(function () {
+const D = window.PD_DATA;
+const SLOTS = ['PG', 'SG', 'SF', 'PF', 'C'];
+const RES = { C: '우승', F: '파이널', CF: '컨퍼런스 파이널', R2: '2라운드', R1: '1라운드' };
+const RND = { R1: '1라운드', R2: '2라운드', CF: '컨퍼런스 파이널', F: '파이널' };
+const CONF = { E: 'EAST', W: 'WEST' };
+const COLORS = {
+  ATL: ['#E03A3E', '#C1D32F', '#fff'], BOS: ['#007A33', '#BA9653', '#fff'], BRK: ['#111111', '#ffffff', '#fff'], CHO: ['#1D1160', '#00788C', '#fff'],
+  CHI: ['#CE1141', '#111111', '#fff'], CLE: ['#860038', '#FDBB30', '#FDBB30'], DAL: ['#00538C', '#B8C4CA', '#fff'], DEN: ['#0E2240', '#FEC524', '#FEC524'],
+  DET: ['#1D42BA', '#C8102E', '#fff'], GSW: ['#1D428A', '#FFC72C', '#FFC72C'], HOU: ['#CE1141', '#C4CED4', '#fff'], IND: ['#002D62', '#FDBB30', '#FDBB30'],
+  LAC: ['#C8102E', '#1D428A', '#fff'], LAL: ['#552583', '#FDB927', '#FDB927'], MEM: ['#5D76A9', '#12173F', '#fff'], MIA: ['#98002E', '#F9A01B', '#fff'],
+  MIL: ['#00471B', '#EEE1C6', '#EEE1C6'], MIN: ['#0C2340', '#78BE20', '#fff'], NOP: ['#0C2340', '#C8102E', '#B4975A'], NYK: ['#006BB6', '#F58426', '#fff'],
+  OKC: ['#007AC1', '#EF3B24', '#fff'], ORL: ['#0077C0', '#111111', '#fff'], PHI: ['#006BB6', '#ED174C', '#fff'], PHO: ['#1D1160', '#E56020', '#E56020'],
+  POR: ['#111111', '#E03A3E', '#fff'], SAC: ['#5A2D81', '#63727A', '#fff'], SAS: ['#111111', '#C4CED4', '#C4CED4'], TOR: ['#CE1141', '#111111', '#fff'],
+  UTA: ['#002B5C', '#F9A01B', '#F9A01B'], WAS: ['#002B5C', '#E31837', '#fff']
+};
+const teamById = {}; D.teams.forEach(t => { teamById[t.id] = t; });
+const nick = n => n.replace(/^.*\s(Trail Blazers|76ers|\S+)$/, '$1');
+const tierOf = t => t.s;
+const pool = {}; // pool[pos][stars] = [player idx]
+D.players.forEach((p, i) => { ((pool[p.p] ||= {})[p.s] ||= []).push(i); });
+
+/* ---------- storage ---------- */
+const KEY = 'playoff-draft-v1';
+let save = { own: {}, ach: {}, titles: 0 };
+try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.own) save = Object.assign(save, s); } catch (e) {}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} }
+const owns = i => !!save.own[i];
+function teamOwned(t) { return t.p.filter(owns).length; }
+function teamsDone() { return D.teams.filter(t => teamOwned(t) === 5).length; }
+function ownCount() { return Object.keys(save.own).length; }
+
+/* ---------- helpers ---------- */
+const $app = document.getElementById('app');
+const rnd = n => Math.floor(Math.random() * n);
+const pick = a => a[rnd(a.length)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function starsHtml(base, plus) {
+  const cls = 's' + Math.min(5, base);
+  return `<span class="stars ${cls}">${'★'.repeat(base)}${plus ? `<span class="plus">★+${plus}</span>` : ''}</span>`;
+}
+function jersey(abbr, no) {
+  const [a, b, c] = COLORS[abbr] || ['#444', '#999', '#fff'];
+  const num = (no || '').slice(0, 2);
+  return `<svg viewBox="0 0 100 112" aria-hidden="true"><path d="M29 5h11q10 14 20 0h11q1 21 14 26v74q-35 7-70 0V31q13-5 14-26z" fill="${a}"/>
+  <path d="M29 5h11q10 14 20 0h11" fill="none" stroke="${b}" stroke-width="4"/><path d="M71 5q1 21 14 26M29 5q-1 21-14 26" fill="none" stroke="${b}" stroke-width="4"/>
+  <text x="50" y="47" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="15" fill="${c}" letter-spacing="1">${abbr}</text>
+  <text x="50" y="84" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="32" fill="${c}" stroke="${b}" stroke-width="1">${esc(num)}</text></svg>`;
+}
+function smallJersey(abbr) {
+  const [a, b] = COLORS[abbr] || ['#444', '#999'];
+  return `<svg viewBox="0 0 100 112" width="26" height="28" aria-hidden="true"><path d="M29 5h11q10 14 20 0h11q1 21 14 26v74q-35 7-70 0V31q13-5 14-26z" fill="${a}" stroke="${b}" stroke-width="5"/></svg>`;
+}
+function cardHtml(i, o = {}) {
+  const p = D.players[i], t = teamById[p.t];
+  const plus = o.plus || 0, total = Math.min(6, p.s + plus);
+  const cls = ['card', 't' + total, o.held ? 'held' : '', plus ? 'syn' : '', o.flip ? 'flip' : '', o.unknown ? 'unknown' : ''].join(' ');
+  const badges = (o.isNew ? '<span class="badge new">NEW</span>' : '') + (o.held ? '<span class="badge hold">HOLD</span>' : '') + (p.x && !o.unknown && o.showAce ? '<span class="badge ace">ACE</span>' : '');
+  return `<div class="${cls}" ${o.slot != null ? `data-slot="${o.slot}" role="button" tabindex="0" aria-pressed="${!!o.held}"` : ''}>
+    <div class="hd"><span>${p.p}</span><span class="cf">${CONF[t.c]}</span></div>
+    <div class="art ${t.c}">${o.unknown ? '' : jersey(t.a, p.no)}<div class="badges">${badges}</div></div>
+    <div class="nm">${esc(p.n)}</div>
+    <div class="mt">${p.p} · ${t.a} · ${t.y} ${RES[t.r]}</div>
+    ${starsHtml(p.s, plus)}
+  </div>`;
+}
+
+/* ---------- synergy ---------- */
+function synergy(ids) {
+  const ps = ids.map(i => D.players[i]), ts = ps.map(p => teamById[p.t]);
+  const cnt = (arr) => arr.reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {});
+  const byTeam = cnt(ps.map(p => p.t)), byFr = cnt(ts.map(t => t.a)), bySea = cnt(ts.map(t => t.y)), byConf = cnt(ts.map(t => t.c));
+  const top = o => Object.entries(o).sort((a, b) => b[1] - a[1])[0];
+  const [tTeam, nTeam] = top(byTeam), [tFr, nFr] = top(byFr), [tSea, nSea] = top(bySea), [tConf, nConf] = top(byConf);
+  const legend = nTeam === 5;
+  const plus = ts.map(t => {
+    if (legend) return 2;
+    let b = 0;
+    if (byFr[t.a] >= 3) b++;
+    if (nSea === 5) b++;
+    if (nConf === 5) b++;
+    if (nFr === 5) b++;
+    return b;
+  });
+  const items = ps.map((p, k) => Math.min(6, p.s + plus[k]) - p.s);
+  const score = ps.reduce((s, p, k) => s + p.s + items[k], 0);
+  let title = '시너지 없음', cls = '', desc = '같은 팀 3장부터 부분 시너지! 5장을 한 팀·한 시즌으로 맞추면 레전더리가 발동합니다.';
+  const tt = teamById[tTeam];
+  if (legend) { title = 'LEGENDARY'; cls = 'legend'; desc = `${tt.y} ${tt.a} 완전체! 전 카드 +2성 (6성 한계 돌파)`; }
+  else {
+    const parts = [];
+    if (nFr === 5) parts.push(`${tFr} 프랜차이즈 5장 +1성(프레스티지)`);
+    if (nFr >= 3) parts.push(`${tFr} ${nFr}장 +1성`);
+    if (nSea === 5) parts.push(`${tSea} 시즌 5장 전원 +1성`);
+    if (nConf === 5) parts.push(`${CONF[tConf]} 5장 전원 +1성`);
+    if (parts.length) { title = nFr === 5 ? 'PRESTIGE' : `TEAM ${nFr}/5`; if (nFr < 3) title = nSea === 5 ? 'SEASON' : 'CONFERENCE'; cls = 'part'; desc = parts.join(' · '); }
+  }
+  const chips = [
+    [`팀: ${tt.a} ${tt.y}`, nTeam], [`프랜차이즈: ${tFr}`, nFr], [`시즌: ${tSea}`, nSea], [`컨퍼런스: ${CONF[tConf]}`, nConf]
+  ];
+  return { plus: items, score, legend, title, cls, desc, chips, target: tTeam, nTeam, nFr };
+}
+
+/* ---------- draft ---------- */
+let draft = null;
+function rollRarity(rates) { const r = Math.random(); return r < rates[0] ? 3 : r < rates[0] + rates[1] ? 4 : 5; }
+function dealOne(slot, rates, taken) {
+  const pos = SLOTS[slot];
+  for (let k = 0; k < 30; k++) {
+    let s = rollRarity(rates); let list = pool[pos][s];
+    while (!list || !list.length) { s = s === 3 ? 5 : s - 1; list = pool[pos][s]; }
+    const i = pick(list);
+    if (!taken.includes(i)) return i;
+  }
+  return pick(pool[pos][3]);
+}
+function collect(ids) {
+  const fresh = [];
+  ids.forEach(i => { if (!save.own[i]) { save.own[i] = 1; fresh.push(i); } });
+  const unlocked = [];
+  new Set(fresh.map(i => D.players[i].t)).forEach(tid => { if (teamOwned(teamById[tid]) === 5) unlocked.push(tid); });
+  persist();
+  unlocked.forEach(tid => { const t = teamById[tid]; toast('UNLOCKED', `${t.y} ${nick(t.n)} 완성`); });
+  checkAch();
+  return fresh;
+}
+function startDraft() {
+  const slots = [];
+  for (let s = 0; s < 5; s++) slots.push(dealOne(s, [.5, .4, .1], slots));
+  const fresh = collect(slots);
+  draft = { slots, held: [0, 0, 0, 0, 0], left: 3, isNew: slots.map(i => fresh.includes(i)), flip: [1, 1, 1, 1, 1], done: false };
+  go('draft');
+}
+function rerollHint() {
+  const used = 3 - draft.left; if (draft.left <= 0) return null;
+  const heldIds = draft.slots.filter((_, k) => draft.held[k]);
+  const base = heldIds.length ? heldIds : draft.slots;
+  const c = {}; base.forEach(i => { const t = D.players[i].t; c[t] = (c[t] || 0) + 1; });
+  const all = {}; draft.slots.forEach(i => { const t = D.players[i].t; all[t] = (all[t] || 0) + 1; });
+  const best = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+  if (!best || best[1] < (heldIds.length ? 1 : 2)) return null;
+  const n = all[best[0]];
+  if (n >= 5) return null;
+  const p = 0.1 * (used + 1) + (n >= 3 ? 0.15 : 0);
+  return { team: best[0], p, n };
+}
+function reroll() {
+  if (draft.left <= 0) return;
+  const h = rerollHint();
+  const slots = draft.slots.slice(), flip = [0, 0, 0, 0, 0];
+  for (let s = 0; s < 5; s++) {
+    if (draft.held[s]) continue;
+    const others = slots.filter((_, k) => k !== s);
+    let i = null;
+    if (h && Math.random() < h.p) {
+      const t = teamById[h.team], cand = t.p.find(j => D.players[j].p === SLOTS[s]);
+      if (cand != null && !others.includes(cand)) i = cand;
+    }
+    if (i == null) i = dealOne(s, [.7, .25, .05], others);
+    slots[s] = i; flip[s] = 1;
+  }
+  draft.left--;
+  const fresh = collect(slots.filter((_, s) => flip[s]));
+  draft.isNew = slots.map((i, s) => flip[s] ? fresh.includes(i) : draft.isNew[s]);
+  draft.slots = slots; draft.flip = flip;
+  render();
+}
+function confirmDraft() {
+  draft.done = true; draft.date = new Date();
+  const syn = synergy(draft.slots);
+  if (syn.legend) unlockAch('legend');
+  if (syn.score >= 30) unlockAch('perfect');
+  go('roster');
+}
+
+/* ---------- tournament ---------- */
+let tour = null;
+function teamScore(t) { return t.p.reduce((s, i) => s + D.players[i].s, 0) + (t.r === 'C' ? 5 : 0); }
+function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(() => t.r === 'C' ? 1 : 0), score: teamScore(t), team: t }; }
+function startTour() {
+  const syn = synergy(draft.slots);
+  const me = { me: true, name: 'MY DREAM TEAM', sub: 'PLAYER · ' + (syn.legend ? 'LEGENDARY' : syn.score >= 24 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
+  const by = r => D.teams.filter(t => r.includes(t.r));
+  const used = new Set(draft.slots.map(i => D.players[i].t));
+  const take = (arr) => { let t; do { t = pick(arr); } while (used.has(t.id)); used.add(t.id); return makeOpp(t); };
+  const opps = [take(by(['C'])), take(by(['C', 'F'])), take(by(['F', 'CF'])), take(by(['CF', 'R2'])), take(by(['R2', 'R1'])), take(by(['R1', 'R2'])), take(by(['R1']))];
+  opps.sort((a, b) => a.score - b.score);
+  // me vs weakest; strongest two in the other half
+  const order = [me, opps[0], opps[3], opps[2], opps[1], opps[6], opps[4], opps[5]];
+  tour = { rounds: [[[order[0], order[1]], [order[2], order[3]], [order[4], order[5]], [order[6], order[7]]]], results: [], stage: 0, live: null, over: false, champion: false, sweeps: true };
+  go('tour');
+}
+const LINES = {
+  PG: ['픽앤롤로 수비를 갈라 놓으며 경기 조율', '하프코트 템포를 쥐고 턴오버 0개', '4쿼터 풀업 3점 연속 성공', '버저비터 플로터로 마침표'],
+  SG: ['캐치앤슛 3점 폭격', '4쿼터 클러치 스텝백 점퍼', '상대 에이스를 끈질기게 막아 냄', '트랜지션 속공 마무리 연속'],
+  SF: ['아이솔레이션 미드레인지로 흐름을 끊음', '양방향을 지배하며 스틸 후 덩크', '윙에서 연속 득점으로 런을 이끎', '결정적인 블록 뒤 역습 3점'],
+  PF: ['스트레치 3점으로 빅맨을 밖으로 끌어냄', '공격 리바운드 풋백으로 분위기 반전', '스위치 수비로 가드까지 봉쇄', '하이포스트에서 컷인 패스 연결'],
+  C: ['림 프로텍션 블록 쇼', '골밑 포스트업을 지배', '더블더블과 스크린으로 공격의 기둥', '리바운드 싸움을 압도']
+};
+function playGame(A, B) {
+  const p = 1 / (1 + Math.exp(-(A.score - B.score) / 4));
+  const aWin = Math.random() < p, W = aWin ? A : B;
+  const ws = W.ids.map(i => D.players[i]);
+  const weights = ws.map(x => x.pts + 4);
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0), k = 0;
+  while ((r -= weights[k]) > 0) k++;
+  const star = ws[Math.min(k, 4)];
+  const pts = Math.round(star.pts * (0.8 + Math.random() * 0.7));
+  return { aWin, text: `${star.n} (${star.p}) — ${pick(LINES[star.p])}, ${pts}점` };
+}
+function simSeries(A, B) { let a = 0, b = 0; const games = []; while (a < 4 && b < 4) { const g = playGame(A, B); g.aWin ? a++ : b++; games.push(g); } return { a, b, games, winner: a > b ? A : B }; }
+function beginMatch() {
+  const [A, B] = tour.rounds[tour.stage][0];
+  const s = simSeries(A, B);
+  tour.live = { s, shown: 0 };
+  render();
+  tickGames();
+}
+let timer = null;
+function tickGames() {
+  clearTimeout(timer);
+  const L = tour.live; if (!L) return;
+  if (L.shown < L.s.games.length) { L.shown++; render(); timer = setTimeout(tickGames, 850); }
+  else finishMatch();
+}
+function skipGames() { clearTimeout(timer); tour.live.shown = tour.live.s.games.length; finishMatch(); }
+function finishMatch() {
+  const L = tour.live; if (L.done) return; L.done = true;
+  const round = tour.rounds[tour.stage];
+  const res = [L.s].concat(round.slice(1).map(([A, B]) => simSeries(A, B)));
+  tour.results[tour.stage] = res;
+  const won = L.s.winner.me;
+  if (L.s.b > 0) tour.sweeps = false;
+  if (!won) { tour.over = true; }
+  else if (tour.stage === 2) { tour.over = true; tour.champion = true; onChampion(); }
+  render();
+}
+function nextRound() {
+  const res = tour.results[tour.stage];
+  const winners = res.map(r => r.winner);
+  const next = []; for (let k = 0; k < winners.length; k += 2) next.push([winners[k], winners[k + 1]]);
+  tour.stage++; tour.rounds[tour.stage] = next; tour.live = null;
+  render(); window.scrollTo(0, 0);
+}
+function onChampion() {
+  save.titles = (save.titles || 0) + 1; persist();
+  unlockAch('title');
+  if (tour.sweeps) unlockAch('sweep');
+  if (tour.rounds[0][0][0].score <= 18) unlockAch('underdog');
+}
+
+/* ---------- achievements ---------- */
+const ACH = [
+  ['title', '첫 번째 우승 반지', '올타임 플레이오프에서 우승'],
+  ['sweep', '16승 무패', '세 시리즈를 모두 4-0으로 끝내고 우승'],
+  ['underdog', '언더독', '팀 점수 18 이하로 우승'],
+  ['legend', '레전더리', '한 팀·한 시즌 주전 5명을 완성'],
+  ['perfect', '만점 로스터', '팀 점수 30 달성'],
+  ['dex100', '수집가', '선수 카드 100장 모으기'],
+  ['dex400', '스카우트', '선수 카드 400장 모으기'],
+  ['gal10', '왕조 기록관', '갤러리 10팀 완성']
+];
+function unlockAch(id) {
+  if (save.ach[id]) return; save.ach[id] = Date.now(); persist();
+  const a = ACH.find(x => x[0] === id); toast('업적 달성', a[1], 'ach');
+}
+function checkAch() {
+  const n = ownCount();
+  if (n >= 100) unlockAch('dex100');
+  if (n >= 400) unlockAch('dex400');
+  if (teamsDone() >= 10) unlockAch('gal10');
+}
+let toastQ = [], toastOn = false;
+function toast(tag, msg, kind) { toastQ.push([tag, msg, kind]); if (!toastOn) nextToast(); }
+function nextToast() {
+  const t = toastQ.shift(); if (!t) { toastOn = false; return; }
+  toastOn = true;
+  const el = document.createElement('div'); el.className = 'toast ' + (t[2] || ''); el.setAttribute('role', 'status');
+  el.innerHTML = `<span class="tag">${esc(t[0])}</span><span>${esc(t[1])}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.remove(); nextToast(); }, 2200);
+}
+
+/* ---------- views ---------- */
+let view = 'main', carIdx = 0, dexF = { pos: '', conf: '', season: '', own: 'all', limit: 60 }, galF = { conf: '', res: '', own: 'all', limit: 20 }, shared = null;
+function go(v) { view = v; clearTimeout(timer); render(); window.scrollTo(0, 0); }
+const ICON_BALL = `<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" fill="#ff8a1f"/><path d="M4 32h56M32 4v56M12 12c10 10 10 30 0 40M52 12c-10 10-10 30 0 40" fill="none" stroke="#1a0d00" stroke-width="3"/></svg>`;
+
+function vMain() {
+  const n = ownCount(), N = D.players.length, g = teamsDone(), G = D.teams.length, a = Object.keys(save.ach).length;
+  const slides = [
+    ['dex', '도감', '수집한 선수 카드 목록', `${n} / ${N}`, n / N],
+    ['gal', '갤러리', '한 팀·한 시즌 5인 완성 기록', `${g} / ${G}`, g / G],
+    ['ach', '업적', `우승 ${save.titles || 0}회`, `${a} / ${ACH.length}`, a / ACH.length]
+  ];
+  const s = slides[carIdx];
+  const icons = {
+    dex: '<svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="#ff8a1f" stroke-width="2"/><path d="M8 8h8M8 12h8M8 16h5" stroke="#ff8a1f" stroke-width="2"/></svg>',
+    gal: '<svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#ff8a1f" stroke-width="2"/><path d="M3 16l5-5 4 4 3-3 6 6" fill="none" stroke="#ff8a1f" stroke-width="2"/></svg>',
+    ach: '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 4h10v5a5 5 0 0 1-10 0zM5 5H3a3 3 0 0 0 4 4M19 5h2a3 3 0 0 1-4 4M12 14v4M8 20h8" fill="none" stroke="#ff8a1f" stroke-width="2"/></svg>'
+  };
+  return `<div class="screen">
+    <div class="hero">${ICON_BALL}<div class="kicker">NBA PLAYOFFS CARD DRAFT</div><h1>Playoff<br>Draft</h1>
+      <p>2015–2025 플레이오프 진출 ${G}팀의 주전으로 5인 드림팀을 완성하세요.</p></div>
+    <button class="btn primary big" data-act="start">드래프트 시작</button>
+    <div class="panel carousel">
+      <div class="slide" data-act="open-${s[0]}" role="button" tabindex="0">
+        <div class="ico">${icons[s[0]]}</div>
+        <div class="txt"><b>${s[1]}</b><small>${s[2]}</small></div>
+        <div class="num">${s[3]}<small>${Math.round(s[4] * 100)}%</small></div>
+      </div>
+      <div class="progress"><i style="width:${(s[4] * 100).toFixed(1)}%"></i></div>
+    </div>
+    <div class="car-nav"><button data-act="car--1" aria-label="이전">‹</button><div class="dots">${slides.map((_, k) => `<i class="${k === carIdx ? 'on' : ''}"></i>`).join('')}</div><button data-act="car-1" aria-label="다음">›</button></div>
+    <div class="rules">
+      <div class="panel"><b>1. 드래프트</b><p>PG·SG·SF·PF·C 다섯 자리에 카드가 1장씩 놓입니다.</p><small>3성 50% · 4성 40% · 5성 10%</small></div>
+      <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%, 같은 팀 3명이 모이면 +15%p).</p><small>3성 70% · 4성 25% · 5성 5%</small></div>
+      <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 6성)</p></div>
+      <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급: 우승 5성 · 파이널/컨퍼런스 파이널 4성 · 2라운드/1라운드 3성 · 플레이오프 평균 25점 이상(또는 팀 내 최다 득점 22점 이상) 에이스 +1성</small></div>
+    </div>
+    <footer>선수 기록: Basketball-Reference 플레이오프 경기당 기록(선발 출전 상위 5명).<br>NBA 및 각 구단과 관계없는 팬 제작 게임입니다.</footer>
+  </div>`;
+}
+
+function vDraft() {
+  const syn = synergy(draft.slots), h = rerollHint();
+  const pips = [0, 1, 2].map(k => `<i class="${k < draft.left ? 'on' : ''}"></i>`).join('');
+  const board = draft.slots.map((i, s) => cardHtml(i, { slot: s, held: draft.held[s], isNew: draft.isNew[s], plus: syn.plus[s], flip: draft.flip[s], showAce: true })).join('');
+  draft.flip = [0, 0, 0, 0, 0];
+  let hint = '';
+  if (h) { const t = teamById[h.team]; hint = `<p class="hint">다음 리롤: 슬롯마다 ${Math.round(h.p * 100)}% 확률로 <b>${t.y} ${t.a}</b> 선수 등장${h.n >= 3 ? ` (${h.n + 1}명 집결 확률 UP!)` : ''}</p>`; }
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="home">← 메인</button><h2>Draft</h2><div class="side">리롤 <span class="pips">${pips}</span></div></div>
+    <div class="row2"><button class="btn primary" data-act="reroll" ${draft.left ? '' : 'disabled'}>리롤 (${draft.left}회 남음)</button><button class="btn" data-act="confirm">이 팀으로 확정</button></div>
+    <div class="panel">
+      <div class="score-h"><div><div class="eyebrow">Drafting</div><div class="big">팀 점수<b>${syn.score}</b></div></div><small>카드를 탭해 HOLD</small></div>
+      <div class="board" style="margin-top:10px">${board}</div>
+    </div>
+    ${synPanel(syn, hint)}
+  </div>`;
+}
+function synPanel(syn, hint) {
+  return `<div class="panel syn"><h3 class="${syn.cls}">${syn.title}</h3><p>${esc(syn.desc)}</p>${hint || ''}
+    <div class="chips">${syn.chips.map(([l, n]) => `<span class="chip ${n >= 3 ? 'on' : ''}">${esc(l)} ${n}/5</span>`).join('')}</div></div>`;
+}
+function fmtDate(d) { return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`; }
+function vRoster(ids, isShared) {
+  const syn = synergy(ids);
+  const board = ids.map((i, s) => cardHtml(i, { plus: syn.plus[s], showAce: true })).join('');
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="home">← 메인</button><h2>Final Roster</h2><div class="side"></div></div>
+    ${isShared ? `<div class="panel"><b>친구가 공유한 로스터</b><p style="margin:4px 0 0;color:var(--mute)">같은 다섯 명으로 토너먼트를 치르거나 직접 드래프트해 보세요.</p></div>` : ''}
+    <div class="row2"><button class="btn primary" data-act="tour">올타임 플레이오프</button><button class="btn" data-act="img">이미지 저장</button></div>
+    <div class="row2"><button class="btn" data-act="share">링크 공유</button><button class="btn" data-act="start">다시 드래프트</button></div>
+    <div class="panel">
+      <div class="score-h"><div><div class="eyebrow">Final Roster</div><div class="big">팀 점수<b>${syn.score}</b></div></div><small>${fmtDate(draft && draft.date || new Date())}</small></div>
+      <div class="board" style="margin-top:10px">${board}</div>
+    </div>
+    ${synPanel(syn)}
+  </div>`;
+}
+function teamBlock(T, isMe) {
+  const ico = isMe ? `<div class="ico" style="background:var(--accent)"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l3 7 7 .6-5.3 4.7L18.4 22 12 18l-6.4 4 1.7-7.7L2 9.6 9 9z" fill="#1a0d00"/></svg></div>`
+    : `<div class="ico" style="background:${(COLORS[T.abbr] || ['#333'])[0]}">${smallJersey(T.abbr)}</div>`;
+  return `<div class="team ${isMe ? 'me' : ''}"><div class="head">${ico}<div class="ttl"><small>${esc(T.sub)}</small><b>${esc(T.name)}</b></div><div class="sc"><small>SCORE</small><b>${T.score}</b></div></div>
+    <ul>${T.ids.map((i, k) => { const p = D.players[i]; return `<li><span class="p">${p.p}</span><span class="n">${esc(p.n)}</span>${starsHtml(p.s, T.plus[k])}</li>`; }).join('')}</ul></div>`;
+}
+const STAGE = ['8강', '4강', '결승'];
+function vTour() {
+  const st = tour.stage, [A, B] = tour.rounds[st][0], L = tour.live;
+  let a = 0, b = 0, games = '';
+  if (L) L.s.games.slice(0, L.shown).forEach((g, k) => { g.aWin ? a++ : b++; games += `<div class="game ${g.aWin ? '' : 'opp'}"><span class="g">GAME ${k + 1}</span><span class="w">${g.aWin ? 'MY TEAM' : esc(B.abbr)} 승</span><span class="d">${esc(g.text)}</span></div>`; });
+  let ctl;
+  if (!L) ctl = `<div class="panel" style="text-align:center;color:var(--mute)">경기 시작을 누르면 7전 4선승 시리즈가 한 경기씩 진행됩니다.</div><button class="btn primary big" data-act="play">${STAGE[st]} 시리즈 시작 (Bo7)</button>`;
+  else if (!L.done) ctl = `<button class="btn big" data-act="skip">결과 바로 보기 ⏭</button>`;
+  else if (tour.champion) ctl = `<div class="panel result"><h3>올타임 챔피언!</h3><p>역대 플레이오프 최강 로스터들을 모두 꺾고 정상에 올랐습니다.</p></div><button class="btn primary big" data-act="start">다시 드래프트하기</button>`;
+  else if (tour.over) ctl = `<div class="panel result lost"><h3>${STAGE[st]} 탈락</h3><p>${esc(B.name)}에 ${a}-${b}로 졌습니다.</p></div><div class="row2"><button class="btn" data-act="back-roster">로스터 보기</button><button class="btn primary" data-act="start">다시 드래프트</button></div>`;
+  else ctl = `<button class="btn primary big" data-act="next">${STAGE[st + 1]} 진출! 다음 라운드 →</button>`;
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="back-roster">← 로스터</button><h2>All-Time Playoffs</h2><div class="side"><span class="stage-tag">${STAGE[st]}</span></div></div>
+    <div><span class="stage-tag">${STAGE[st]} · 7전 4선승제</span></div>
+    ${teamBlock(A, true)}
+    <div class="series"><span class="lbl">BO7</span><b class="${a > b ? 'lead' : ''}">${a}</b><b>:</b><b class="${b > a ? 'lead' : ''}">${b}</b><span class="lbl">4선승</span></div>
+    ${teamBlock(B, false)}
+    ${games ? `<div class="games">${games}</div>` : ''}
+    ${ctl}
+    ${bracket()}
+  </div>`;
+}
+function bracket() {
+  const names = ['8강 (Quarterfinals)', '4강 (Semifinals)', '결승 (Finals)'];
+  let h = '<div class="panel bracket"><div class="score-h"><b>토너먼트 대진표</b><small>경기 전에는 팀 점수, 끝나면 시리즈 스코어</small></div>';
+  for (let r = 0; r < 3; r++) {
+    h += `<h4 class="${r === 2 ? 'fin' : ''}">${names[r]}</h4>`;
+    const round = tour.rounds[r], res = tour.results[r];
+    const n = [4, 2, 1][r];
+    for (let m = 0; m < n; m++) {
+      const pair = round && round[m];
+      if (!pair) { h += `<div class="match"><div class="tbd"><span>TBD</span><span>-</span></div><div class="tbd"><span>TBD</span><span>-</span></div></div>`; continue; }
+      const rs = res && res[m];
+      const line = (T, k) => { const v = rs ? (k ? rs.b : rs.a) : T.score; const c = rs ? (rs.winner === T ? 'w' : 'l') : ''; return `<div class="${c} ${T.me ? 'me' : ''}"><span>${T.me ? '★ ' : ''}${esc(T.name)}</span><span>${v}</span></div>`; };
+      h += `<div class="match ${pair[0].me || pair[1].me ? 'mine' : ''}">${line(pair[0], 0)}${line(pair[1], 1)}</div>`;
+    }
+  }
+  return h + '</div>';
+}
+
+function vDex() {
+  const N = D.players.length, n = ownCount();
+  let list = D.players.map((p, i) => i).filter(i => {
+    const p = D.players[i], t = teamById[p.t];
+    if (dexF.pos && p.p !== dexF.pos) return false;
+    if (dexF.conf && t.c !== dexF.conf) return false;
+    if (dexF.season && String(t.y) !== dexF.season) return false;
+    if (dexF.own === 'own' && !owns(i)) return false;
+    if (dexF.own === 'miss' && owns(i)) return false;
+    return true;
+  });
+  const total = list.length; list = list.slice(0, dexF.limit);
+  const seasons = [...new Set(D.teams.map(t => t.y))];
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="home">← 메인</button><h2>도감</h2><div class="side">${n} / ${N} (${(n / N * 100).toFixed(1)}%)</div></div>
+    <div class="progress" style="margin:0"><i style="width:${n / N * 100}%"></i></div>
+    <div class="filters">
+      <select id="f-pos" aria-label="포지션"><option value="">전체 포지션</option>${SLOTS.map(s => `<option ${dexF.pos === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      <select id="f-conf" aria-label="컨퍼런스"><option value="">전체 컨퍼런스</option><option value="E" ${dexF.conf === 'E' ? 'selected' : ''}>EAST</option><option value="W" ${dexF.conf === 'W' ? 'selected' : ''}>WEST</option></select>
+      <select id="f-season" aria-label="시즌"><option value="">전체 시즌</option>${seasons.map(y => `<option ${dexF.season === String(y) ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    </div>
+    <div class="filters"><div class="seg">${[['all', '전체'], ['own', '보유'], ['miss', '미보유']].map(([k, l]) => `<button data-act="dexown-${k}" class="${dexF.own === k ? 'on' : ''}">${l}</button>`).join('')}</div><span class="count">${total}장 표시</span></div>
+    <div class="grid3">${list.map(i => cardHtml(i, { unknown: !owns(i) })).join('')}</div>
+    ${total > list.length ? `<button class="btn more" data-act="dexmore">더 보기 (${total - list.length}장 남음)</button>` : ''}
+  </div>`;
+}
+function describe(t) {
+  const fin = t.path[t.path.length - 1];
+  const steps = t.path.map(([r, o, w, l]) => `${RND[r]} ${o} ${w}-${l}`).join(' · ');
+  const ace = t.p.map(i => D.players[i]).sort((a, b) => b.pts - a.pts)[0];
+  let head;
+  if (t.r === 'C') head = `파이널에서 ${fin[1]}를 ${fin[2]}-${fin[3]}로 꺾고 정상에 올랐습니다.`;
+  else if (t.r === 'F') head = `파이널까지 올랐지만 ${fin[1]}에 ${fin[2]}-${fin[3]}로 무릎을 꿇었습니다.`;
+  else head = `${RND[fin[0]]}에서 ${fin[1]}에 ${fin[2]}-${fin[3]}로 막혔습니다.`;
+  return `${head} 주포는 ${ace.n}, 플레이오프 평균 ${ace.pts.toFixed(1)}점.<br><span style="color:var(--mute);font-size:12px">${steps}</span>`;
+}
+function vGal() {
+  const G = D.teams.length, g = teamsDone();
+  let list = D.teams.filter(t => {
+    if (galF.conf && t.c !== galF.conf) return false;
+    if (galF.res && t.r !== galF.res) return false;
+    const o = teamOwned(t);
+    if (galF.own === 'own' && o < 5) return false;
+    if (galF.own === 'miss' && o === 5) return false;
+    return true;
+  }).sort((a, b) => b.y - a.y || b.s - a.s);
+  const total = list.length; list = list.slice(0, galF.limit);
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="home">← 메인</button><h2>갤러리</h2><div class="side">완성 ${g} / ${G}</div></div>
+    <div class="progress" style="margin:0"><i style="width:${g / G * 100}%"></i></div>
+    <div class="filters">
+      <select id="g-conf" aria-label="컨퍼런스"><option value="">전체 컨퍼런스</option><option value="E" ${galF.conf === 'E' ? 'selected' : ''}>EAST</option><option value="W" ${galF.conf === 'W' ? 'selected' : ''}>WEST</option></select>
+      <select id="g-res" aria-label="성적"><option value="">전체 성적</option>${Object.entries(RES).map(([k, v]) => `<option value="${k}" ${galF.res === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+    </div>
+    <div class="filters"><div class="seg">${[['all', '전체'], ['own', '완성'], ['miss', '미완성']].map(([k, l]) => `<button data-act="galown-${k}" class="${galF.own === k ? 'on' : ''}">${l}</button>`).join('')}</div><span class="count">${total}팀 표시</span></div>
+    ${list.map(t => {
+      const [c1, c2] = COLORS[t.a] || ['#333', '#666'], o = teamOwned(t);
+      return `<div class="gcard"><div class="ban" style="background:linear-gradient(120deg, ${c1} 0%, ${c1}cc 45%, #0d1320 100%)">
+        <span class="bigab">${t.a}</span><div class="ico">${smallJersey(t.a)}</div>
+        <div class="meta"><small>${t.y} ${RES[t.r]} · ${CONF[t.c]} ${starsHtml(t.s, 0)}</small><b>${esc(t.n)}</b></div>
+        <span class="cnt">${o} / 5 수집</span>${o === 5 ? '<span class="done">★ COMPLETE</span>' : ''}</div>
+        <p class="desc">${describe(t)}</p>
+        <div class="ros">${t.p.map(i => { const p = D.players[i]; return `<div class="${owns(i) ? '' : 'no'}"><small>${p.p}</small><b>${owns(i) ? esc(p.n.split(' ').slice(-1)[0]) : '???'}</b></div>`; }).join('')}</div></div>`;
+    }).join('')}
+    ${total > list.length ? `<button class="btn more" data-act="galmore">더 보기 (${total - list.length}팀 남음)</button>` : ''}
+  </div>`;
+}
+function vAch() {
+  return `<div class="screen">
+    <div class="bar"><button class="back" data-act="home">← 메인</button><h2>업적</h2><div class="side">우승 ${save.titles || 0}회</div></div>
+    ${ACH.map(([id, n, d], k) => `<div class="panel ach ${save.ach[id] ? 'on' : 'off'}"><div class="medal">${k + 1}</div><div><b>${n}</b><small>${d}${save.ach[id] ? ' · 달성' : ''}</small></div></div>`).join('')}
+  </div>`;
+}
+
+function render() {
+  let h = '';
+  if (view === 'main') h = vMain();
+  else if (view === 'draft') h = vDraft();
+  else if (view === 'roster') h = vRoster(draft.slots, !!draft.shared);
+  else if (view === 'tour') h = vTour();
+  else if (view === 'dex') h = vDex();
+  else if (view === 'gal') h = vGal();
+  else if (view === 'ach') h = vAch();
+  $app.innerHTML = h;
+}
+
+/* ---------- image & share ---------- */
+function rosterImage() {
+  const ids = draft.slots, syn = synergy(ids);
+  const W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#0a0e16'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#ff8a1f'; g.font = '700 30px Oswald, sans-serif'; g.fillText('PLAYOFF DRAFT · FINAL ROSTER', 70, 100);
+  g.fillStyle = '#eef2f8'; g.font = '700 96px Oswald, sans-serif'; g.fillText('MY DREAM TEAM', 70, 200);
+  g.fillStyle = '#8592a8'; g.font = '500 32px "Noto Sans KR", sans-serif'; g.fillText(`팀 점수 ${syn.score} · ${syn.title}`, 70, 260);
+  const jp = new Path2D('M29 5h11q10 14 20 0h11q1 21 14 26v74q-35 7-70 0V31q13-5 14-26z');
+  ids.forEach((i, k) => {
+    const p = D.players[i], t = teamById[p.t], y = 320 + k * 190, [c1, c2, c3] = COLORS[t.a] || ['#444', '#999', '#fff'];
+    g.fillStyle = '#121926'; g.beginPath(); g.roundRect(60, y, 960, 170, 22); g.fill();
+    g.fillStyle = t.c === 'E' ? '#2a5bd7' : '#e04f35'; g.beginPath(); g.roundRect(80, y + 15, 140, 140, 16); g.fill();
+    g.save(); g.translate(100, y + 25); g.scale(1, 1.05); g.fillStyle = c1; g.fill(jp); g.strokeStyle = c2; g.lineWidth = 4; g.stroke(jp);
+    g.fillStyle = c3; g.font = '700 32px Oswald, sans-serif'; g.textAlign = 'center'; g.fillText((p.no || '').slice(0, 2), 50, 80); g.restore();
+    g.textAlign = 'left';
+    g.fillStyle = '#8592a8'; g.font = '700 28px Oswald, sans-serif'; g.fillText(p.p, 250, y + 55);
+    g.fillStyle = '#eef2f8'; g.font = '900 44px "Noto Sans KR", sans-serif'; g.fillText(p.n, 250, y + 105);
+    g.fillStyle = '#8592a8'; g.font = '500 26px "Noto Sans KR", sans-serif'; g.fillText(`${t.a} · ${t.y} ${RES[t.r]} · PO ${p.pts.toFixed(1)}점`, 250, y + 145);
+    const st = Math.min(6, p.s + syn.plus[k]);
+    g.fillStyle = st >= 6 ? '#4ff0ff' : st === 5 ? '#ffc83d' : st === 4 ? '#a982ff' : '#b9c2d0'; g.font = '36px sans-serif'; g.textAlign = 'right'; g.fillText('★'.repeat(st), 990, y + 60); g.textAlign = 'left';
+  });
+  g.fillStyle = '#4a5568'; g.font = '500 24px "Noto Sans KR", sans-serif'; g.fillText(fmtDate(draft.date || new Date()), 70, 1300);
+  return cv.toDataURL('image/png');
+}
+function showImage() {
+  const url = rosterImage();
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<img src="${url}" alt="내 로스터 이미지"><p>이미지를 길게 누르거나 오른쪽 클릭해서 저장하세요.</p><div class="row2" style="width:100%;max-width:360px"><a class="btn" href="${url}" download="playoff-draft.png" style="text-align:center;text-decoration:none">파일로 받기</a><button class="btn primary">닫기</button></div>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); });
+  document.body.appendChild(m);
+}
+function shareLink() {
+  const url = location.href.split('#')[0] + '#r-' + draft.slots.join('-');
+  const done = () => toast('링크 복사', '공유 링크를 복사했습니다');
+  try { navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url)); } catch (e) { fallbackCopy(url); }
+}
+function fallbackCopy(url) {
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<p>아래 주소를 복사해 공유하세요.</p><input id="share-url" readonly value="${esc(url)}" style="width:100%;max-width:420px;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--fg)"><button class="btn primary">닫기</button>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); });
+  document.body.appendChild(m); const inp = m.querySelector('input'); inp.focus(); inp.select();
+}
+function loadHash() {
+  const m = /^#r-([\d-]+)$/.exec(location.hash);
+  if (!m) return false;
+  const ids = m[1].split('-').map(Number);
+  if (ids.length !== 5 || !ids.every((i, k) => D.players[i] && D.players[i].p === SLOTS[k])) return false;
+  draft = { slots: ids, held: [0, 0, 0, 0, 0], left: 0, isNew: [0, 0, 0, 0, 0], flip: [0, 0, 0, 0, 0], done: true, shared: true, date: new Date() };
+  view = 'roster'; return true;
+}
+
+/* ---------- events ---------- */
+function act(a) {
+  if (a === 'start') { if (location.hash) history.replaceState(null, '', location.pathname + location.search); startDraft(); }
+  else if (a === 'home') go('main');
+  else if (a === 'reroll') reroll();
+  else if (a === 'confirm') confirmDraft();
+  else if (a === 'tour') startTour();
+  else if (a === 'img') showImage();
+  else if (a === 'share') shareLink();
+  else if (a === 'play') beginMatch();
+  else if (a === 'skip') skipGames();
+  else if (a === 'next') nextRound();
+  else if (a === 'back-roster') go('roster');
+  else if (a.startsWith('open-')) go(a.slice(5));
+  else if (a.startsWith('car-')) { carIdx = (carIdx + Number(a.slice(4)) + 3) % 3; render(); }
+  else if (a.startsWith('dexown-')) { dexF.own = a.slice(7); dexF.limit = 60; render(); }
+  else if (a === 'dexmore') { dexF.limit += 60; render(); }
+  else if (a.startsWith('galown-')) { galF.own = a.slice(7); galF.limit = 20; render(); }
+  else if (a === 'galmore') { galF.limit += 20; render(); }
+}
+$app.addEventListener('click', e => {
+  const card = e.target.closest('[data-slot]');
+  if (card && view === 'draft') { const s = +card.dataset.slot; draft.held[s] = draft.held[s] ? 0 : 1; render(); return; }
+  const b = e.target.closest('[data-act]'); if (b) act(b.dataset.act);
+});
+$app.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('[data-slot],[data-act]'); if (el && el.tagName !== 'BUTTON') { e.preventDefault(); el.click(); }
+});
+$app.addEventListener('change', e => {
+  const id = e.target.id, v = e.target.value;
+  if (id === 'f-pos') dexF.pos = v; else if (id === 'f-conf') dexF.conf = v; else if (id === 'f-season') dexF.season = v;
+  else if (id === 'g-conf') galF.conf = v; else if (id === 'g-res') galF.res = v; else return;
+  dexF.limit = 60; galF.limit = 20; render();
+});
+window.addEventListener('hashchange', () => { if (loadHash()) render(); });
+loadHash();
+render();
+})();
+</script>
