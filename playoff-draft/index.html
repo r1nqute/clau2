@@ -136,6 +136,25 @@ footer { color: var(--dim); font-size: 11px; text-align: center; padding: 18px 0
 input[type=search] { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; flex: 1; min-width: 0; }
 .mode-tag { display: inline-flex; background: #102836; color: var(--hold); border: 1px solid #1d5068; padding: 2px 9px; border-radius: 6px; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
 .empty-note { color: var(--mute); text-align: center; padding: 18px 8px; }
+.sty { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 900; white-space: nowrap; border: 1px solid currentColor; background: rgba(0,0,0,.25); }
+.sty.st-run { color: #ff7a59; } .sty.st-paint { color: #c98bff; } .sty.st-three { color: #4fd1ff; } .sty.st-def { color: #6ee7a0; } .sty.st-hero { color: #ffc83d; } .sty.st-motion { color: #ff8ad8; }
+.adv { display: inline-flex; border-radius: 6px; padding: 1px 7px; font-size: 11px; font-weight: 900; white-space: nowrap; }
+.adv.up { background: #10351f; color: #6ee7a0; } .adv.down { background: #3a1414; color: #ff7676; } .adv.even { background: var(--panel2); color: var(--mute); }
+.team .stl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 8px 14px 0; }
+.meters { display: grid; grid-template-columns: 76px 1fr 34px; gap: 6px 8px; align-items: center; font-size: 12px; }
+.meters .mbar { height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+.meters .mbar i { display: block; height: 100%; border-radius: 4px; }
+.meters .ml { font-weight: 700; white-space: nowrap; }
+.ml.st-run { color: #ff7a59; } .ml.st-paint { color: #c98bff; } .ml.st-three { color: #4fd1ff; } .ml.st-def { color: #6ee7a0; } .ml.st-hero { color: #ffc83d; } .ml.st-motion { color: #ff8ad8; }
+.meters .mbar i.st-run { background: #ff7a59; } .meters .mbar i.st-paint { background: #c98bff; } .meters .mbar i.st-three { background: #4fd1ff; } .meters .mbar i.st-def { background: #6ee7a0; } .meters .mbar i.st-hero { background: #ffc83d; } .meters .mbar i.st-motion { background: #ff8ad8; }
+.meters .v { color: var(--mute); text-align: right; font-variant-numeric: tabular-nums; font-family: var(--f-num); }
+.ring { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 11px; color: var(--mute); }
+.plan { display: flex; flex-direction: column; gap: 8px; }
+.plan .opt { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.plan .opt .sty { justify-self: start; }
+.plan .opt.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.plan .opt small { grid-column: 1 / -1; color: var(--mute); font-size: 12px; }
+.plan .opt .pct { font-family: var(--f-num); font-size: 18px; color: var(--fg); }
 .card .hd { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; letter-spacing: .06em; }
 .card .hd .cf { color: var(--mute); }
 .card .art { position: relative; border-radius: 8px; aspect-ratio: 4/5; display: grid; place-items: center; overflow: hidden; max-width: 100%; }
@@ -350,6 +369,47 @@ function cardHtml(i, o = {}) {
   </div>`;
 }
 
+/* ---------- team styles & counters ---------- */
+const STY = {
+  run: { n: '런앤건', d: '빠른 템포와 속공' },
+  paint: { n: '페인트 지배', d: '골밑 득점·자유투·공격 리바운드' },
+  three: { n: '3점 폭격', d: '높은 3점 시도 비율' },
+  def: { n: '질식 수비', d: '최상위 수비 효율' },
+  hero: { n: '히어로 볼', d: '에이스 한 명에게 몰린 공격' },
+  motion: { n: '볼 무브먼트', d: '어시스트 비율이 높은 패스 농구' }
+};
+const RING = ['run', 'paint', 'three', 'def', 'hero', 'motion']; // each beats the next one
+const WHY = {
+  run: '느린 빅맨들이 속공 템포를 따라가지 못합니다',
+  paint: '작은 슈터 라인업이 골밑과 리바운드 싸움에서 밀립니다',
+  three: '넓은 스페이싱이 하프코트 수비를 늘려 놓습니다',
+  def: '에이스 한 명에게 수비를 몰아 봉쇄합니다',
+  hero: '해결사의 1대1이 접전 막판을 가져갑니다',
+  motion: '참을성 있는 패스가 속공 팀의 실수를 끌어냅니다'
+};
+const COUNTER = 8; // team-score points the favoured side gains
+const beats = (a, b) => RING[(RING.indexOf(a) + 1) % RING.length] === b;
+function advOf(a, b) { return beats(a, b) ? 1 : beats(b, a) ? -1 : 0; }
+function styChip(k) { return `<span class="sty st-${k}">${STY[k].n}</span>`; }
+function advChip(v) { return v > 0 ? `<span class="adv up">상성 유리 +${COUNTER}</span>` : v < 0 ? `<span class="adv down">상성 불리 −${COUNTER}</span>` : '<span class="adv even">상성 보통</span>'; }
+function topStyles(vec) { return Object.entries(vec).sort((a, b) => b[1] - a[1]).map(x => x[0]); }
+function myVec(ids) {
+  const ps = ids.map(i => D.players[i]), ts = ps.map(p => teamById[p.t]);
+  const avg = k => ts.reduce((s, t) => s + t.st[k], 0) / ts.length;
+  const share = Math.max(...ps.map(p => p.pts)) / (ps.reduce((s, p) => s + p.pts, 0) || 1);
+  const f3 = ps.reduce((s, p) => s + (p.f3a || 0), 0);
+  const z = (v, k) => (v - D.norm[k][0]) / D.norm[k][1];
+  const v = { run: avg('run'), paint: avg('paint'), three: 0.5 * avg('three') + 0.5 * z(f3, 'f3'), def: avg('def'), hero: z(share, 'hero'), motion: avg('motion') };
+  for (const k in v) v[k] = Math.round(v[k] * 100) / 100;
+  return v;
+}
+function meters(vec) {
+  return `<div class="meters">${RING.map(k => { const z = vec[k], w = Math.max(4, Math.min(100, 50 + z * 22)); return `<span class="ml st-${k}">${STY[k].n}</span><span class="mbar"><i class="st-${k}" style="width:${w}%"></i></span><span class="v">${z >= 0 ? '+' : ''}${z.toFixed(1)}</span>`; }).join('')}</div>`;
+}
+function ringHtml() { return `<div class="ring">${RING.map(k => styChip(k)).join(' › ')} › ${styChip('run')}</div>`; }
+function gameWinP(A, B) { const adv = advOf(A.style, B.style); return 1 / (1 + Math.exp(-(A.score - B.score + adv * COUNTER) / 5)); }
+function seriesWinP(p) { let w = 0; for (let k = 0; k < 4; k++) { const c = [1, 4, 10, 20][k]; w += c * Math.pow(p, 4) * Math.pow(1 - p, k); } return w; }
+
 /* ---------- synergy ---------- */
 function synergy(ids) {
   const ps = ids.map(i => D.players[i]), ts = ps.map(p => teamById[p.t]);
@@ -513,7 +573,7 @@ function vFree() {
       <div class="score-h"><div><div class="eyebrow">Free Mode · 도감 선수로 구성</div><div class="big">팀 점수<b>${fs.score}</b></div></div><small>자리를 탭해 선수 고르기</small></div>
       <div class="board" style="margin-top:10px">${board}</div>
     </div>
-    ${fs.syn && full ? synPanel(fs.syn) : ''}
+    ${fs.syn && full ? synPanel(fs.syn, '', free.slots) : ''}
     ${picker}
   </div>`;
 }
@@ -526,10 +586,11 @@ function freeConfirm() {
 /* ---------- tournament ---------- */
 let tour = null;
 function teamScore(t) { return t.p.reduce((s, i) => s + D.players[i].s, 0) + (t.r === 'C' ? 5 : 0); }
-function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(() => t.r === 'C' ? 1 : 0), score: teamScore(t), team: t }; }
+function makeOpp(t) { return { name: `${t.y} ${t.a}`, sub: `${t.y} PO · ${CONF[t.c]}`, abbr: t.a, ids: t.p.slice(), plus: t.p.map(() => t.r === 'C' ? 1 : 0), score: teamScore(t), team: t, style: topStyles(t.st)[0] }; }
 function startTour() {
   const syn = synergy(draft.slots);
   const me = { me: true, name: 'MY DREAM TEAM', sub: (draft.free ? 'FREE MODE · ' : 'PLAYER · ') + (syn.legend ? 'LEGENDARY' : syn.score >= 35 ? 'ELITE' : 'CHALLENGER'), ids: draft.slots.slice(), plus: syn.plus, score: syn.score };
+  me.styles = topStyles(myVec(me.ids)).slice(0, 2); me.style = me.styles[0];
   const by = r => D.teams.filter(t => r.includes(t.r));
   const used = new Set(draft.slots.map(i => D.players[i].t));
   const take = (arr) => { let t; do { t = pick(arr); } while (used.has(t.id)); used.add(t.id); return makeOpp(t); };
@@ -548,15 +609,16 @@ const LINES = {
   C: ['림 프로텍션 블록 쇼', '골밑 포스트업을 지배', '더블더블과 스크린으로 공격의 기둥', '리바운드 싸움을 압도']
 };
 function playGame(A, B) {
-  const p = 1 / (1 + Math.exp(-(A.score - B.score) / 5));
-  const aWin = Math.random() < p, W = aWin ? A : B;
+  const p = gameWinP(A, B), adv = advOf(A.style, B.style);
+  const aWin = Math.random() < p, W = aWin ? A : B, wAdv = aWin ? adv > 0 : adv < 0;
   const ws = W.ids.map(i => D.players[i]);
   const weights = ws.map(x => x.pts + 4);
   let r = Math.random() * weights.reduce((a, b) => a + b, 0), k = 0;
   while ((r -= weights[k]) > 0) k++;
   const star = ws[Math.min(k, 4)];
   const pts = Math.round(star.pts * (0.8 + Math.random() * 0.7));
-  return { aWin, text: `${star.n} (${star.p}) — ${pick(LINES[star.p])}, ${pts}점` };
+  const flavor = wAdv && Math.random() < 0.6 ? `[${STY[W.style].n}] ${WHY[W.style]}` : pick(LINES[star.p]);
+  return { aWin, text: `${star.n} (${star.p}) — ${flavor}, ${pts}점` };
 }
 function simSeries(A, B) { let a = 0, b = 0; const games = []; while (a < 4 && b < 4) { const g = playGame(A, B); g.aWin ? a++ : b++; games.push(g); } return { a, b, games, winner: a > b ? A : B }; }
 function beginMatch() {
@@ -669,7 +731,8 @@ function vMain() {
       <div class="panel"><b>2. 홀드 & 리롤</b><p>카드를 눌러 고정하고, 나머지를 최대 3번 다시 뽑습니다. 리롤할수록 같은 팀·시즌 선수가 나올 확률이 오릅니다(10%→20%→30%). 그 팀 카드를 홀드하면 장당 +15%p, 같은 팀 3명이 모이면 +15%p 더 붙습니다(최대 85%).</p><small>일반(1~5성) 70% · 레어(6~8성) 25% · 에픽(9~10성) 5%</small></div>
       <div class="panel"><b>3. 시너지</b><p>같은 프랜차이즈 <span class="hl3">3~4장</span> 해당 카드 +1, 같은 시즌/컨퍼런스 5장 +1, 같은 프랜차이즈 5장 <span class="hl4">프레스티지</span> +1, 같은 팀·같은 시즌 5장 <span class="hl6">레전더리</span> +2 (최대 10성)</p></div>
       <div class="panel"><b>4. 올타임 플레이오프</b><p>로스터를 확정하면 역대 플레이오프 팀 7곳과 8강 토너먼트를 치릅니다. 모든 시리즈는 7전 4선승.</p><small>카드 등급(1~10성): 그 시즌 플레이오프 경기당 기록으로 매깁니다. 득점(슈팅 효율 반영)·리바운드·어시스트·스틸·블록·턴오버를 합친 점수를 같은 포지션 176명 중 순위로 나눠, 상위 2%가 10성입니다.</small></div>
-      <div class="panel"><b>5. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
+      <div class="panel"><b>5. 전술과 상성</b><p>팀마다 그 시즌 기록(페이스, 3점 시도 비율, 자유투·공격 리바운드, 수비 효율, 어시스트 비율, 에이스 득점 비중)으로 전술이 정해집니다. 상성이 유리하면 팀 점수 +${COUNTER}로 계산해서, 점수가 낮은 팀도 강팀을 잡을 수 있습니다.</p>${ringHtml()}<small>내 팀은 카드의 원래 팀 기록으로 주·보조 전술 두 가지를 갖고, 시리즈마다 하나를 고릅니다.</small></div>
+      <div class="panel"><b>6. 자유 모드</b><p>도감에 등록된 선수로 다섯 자리를 마음대로 채웁니다. 시너지와 토너먼트는 그대로 적용되고, 업적은 드래프트 모드에서만 얻습니다.</p></div>
     </div>
     <footer>선수 기록: Basketball-Reference 플레이오프 경기당 기록(선발 출전 상위 5명).<br>NBA 및 각 구단과 관계없는 팬 제작 게임입니다.</footer>
   </div>`;
@@ -690,11 +753,13 @@ function vDraft() {
       <div class="score-h"><div><div class="eyebrow">Drafting</div><div class="big">팀 점수<b>${syn.score}</b></div></div><small>카드를 탭해 HOLD</small></div>
       <div class="board" style="margin-top:10px">${board}</div>
     </div>
-    ${synPanel(syn, hint)}
+    ${synPanel(syn, hint, draft.slots)}
   </div>`;
 }
-function synPanel(syn, hint) {
+function synPanel(syn, hint, ids) {
+  const tops = ids ? topStyles(myVec(ids)).slice(0, 2) : null;
   return `<div class="panel syn"><h3 class="${syn.cls}">${syn.title}</h3><p>${esc(syn.desc)}</p>${hint || ''}
+    ${tops ? `<p style="margin-top:6px">전술: ${tops.map(styChip).join(' ')} <small style="color:var(--mute)">카드의 원래 팀 기록으로 정해집니다</small></p>` : ''}
     <div class="chips">${syn.chips.map(([l, n]) => `<span class="chip ${n >= 3 ? 'on' : ''}">${esc(l)} ${n}/5</span>`).join('')}</div></div>`;
 }
 function fmtDate(d) { return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`; }
@@ -712,12 +777,17 @@ function vRoster(ids, isShared) {
       <div class="board" style="margin-top:10px">${board}</div>
     </div>
     ${synPanel(syn)}
+    <div class="panel"><div class="score-h"><b>팀 전술 분석</b><small>시즌 평균 대비 (0 = 그해 플레이오프 팀 평균)</small></div>
+      <p style="margin:6px 0 10px;color:#c9d1de">주 전술 ${styChip(topStyles(myVec(ids))[0])} · 보조 ${styChip(topStyles(myVec(ids))[1])} — 시리즈마다 둘 중 하나를 골라 씁니다.</p>
+      ${meters(myVec(ids))}
+      <p style="margin:12px 0 6px;color:var(--mute);font-size:12px">상성: 왼쪽이 오른쪽을 이깁니다. 유리하면 팀 점수 +${COUNTER}로 계산합니다.</p>${ringHtml()}</div>
   </div>`;
 }
-function teamBlock(T, isMe) {
+function teamBlock(T, isMe, vs) {
   const ico = isMe ? `<div class="ico" style="background:var(--accent)"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2l3 7 7 .6-5.3 4.7L18.4 22 12 18l-6.4 4 1.7-7.7L2 9.6 9 9z" fill="#1a0d00"/></svg></div>`
     : `<div class="ico" style="background:${(COLORS[T.abbr] || ['#333'])[0]}">${smallJersey(T.abbr)}</div>`;
   return `<div class="team ${isMe ? 'me' : ''}"><div class="head">${ico}<div class="ttl"><small>${esc(T.sub)}</small><b>${esc(T.name)}</b></div><div class="sc"><small>SCORE</small><b>${T.score}</b></div></div>
+    ${T.style ? `<div class="stl">${styChip(T.style)}${vs && vs.style ? advChip(advOf(T.style, vs.style)) : ''}<small style="color:var(--mute)">${STY[T.style].d}</small></div>` : ''}
     <ul>${T.ids.map((i, k) => { const p = D.players[i]; return `<li><span class="p">${p.p}</span><span class="n">${esc(p.n)}</span>${starsHtml(p.s, T.plus[k])}</li>`; }).join('')}</ul></div>`;
 }
 const STAGE = ['8강', '4강', '결승'];
@@ -726,7 +796,12 @@ function vTour() {
   let a = 0, b = 0, games = '';
   if (L) L.s.games.slice(0, L.shown).forEach((g, k) => { g.aWin ? a++ : b++; games += `<div class="game ${g.aWin ? '' : 'opp'}"><span class="g">GAME ${k + 1}</span><span class="w">${g.aWin ? 'MY TEAM' : esc(B.abbr)} 승</span><span class="d">${esc(g.text)}</span></div>`; });
   let ctl;
-  if (!L) ctl = `<div class="panel" style="text-align:center;color:var(--mute)">경기 시작을 누르면 7전 4선승 시리즈가 한 경기씩 진행됩니다.</div><button class="btn primary big" data-act="play">${STAGE[st]} 시리즈 시작 (Bo7)</button>`;
+  if (!L) ctl = `<div class="panel plan"><div class="score-h"><b>작전 선택</b><small>상대 ${esc(B.name)} · ${STY[B.style].n}</small></div>
+      ${A.styles.map(k => { const T = Object.assign({}, A, { style: k }), adv = advOf(k, B.style), gp = gameWinP(T, B);
+        return `<button class="opt ${A.style === k ? 'on' : ''}" data-act="style-${k}">${styChip(k)}<span class="pct">${Math.round(seriesWinP(gp) * 100)}%</span>
+          <small>${adv > 0 ? `상성 유리: ${WHY[k]}` : adv < 0 ? `상성 불리: ${WHY[B.style]}` : '상성 보통: 팀 점수로만 겨룹니다'} · 경기당 ${Math.round(gp * 100)}%, 시리즈 승리 확률</small></button>`; }).join('')}
+      ${ringHtml()}</div>
+    <button class="btn primary big" data-act="play">${STAGE[st]} 시리즈 시작 (Bo7)</button>`;
   else if (!L.done) ctl = `<button class="btn big" data-act="skip">결과 바로 보기 ⏭</button>`;
   else if (tour.champion) ctl = `<div class="panel result"><h3>올타임 챔피언!</h3><p>역대 플레이오프 최강 로스터들을 모두 꺾고 정상에 올랐습니다.</p></div><button class="btn primary big" data-act="${draft.free ? 'free-edit' : 'start'}">${draft.free ? '다시 구성하기' : '다시 드래프트하기'}</button>`;
   else if (tour.over) ctl = `<div class="panel result lost"><h3>${STAGE[st]} 탈락</h3><p>${esc(B.name)}에 ${a}-${b}로 졌습니다.</p></div><div class="row2"><button class="btn" data-act="back-roster">로스터 보기</button><button class="btn primary" data-act="start">다시 드래프트</button></div>`;
@@ -734,9 +809,9 @@ function vTour() {
   return `<div class="screen">
     <div class="bar"><button class="back" data-act="back-roster">← 로스터</button><h2>All-Time Playoffs</h2><div class="side"><span class="stage-tag">${STAGE[st]}</span></div></div>
     <div><span class="stage-tag">${STAGE[st]} · 7전 4선승제</span></div>
-    ${teamBlock(A, true)}
+    ${teamBlock(A, true, B)}
     <div class="series"><span class="lbl">BO7</span><b class="${a > b ? 'lead' : ''}">${a}</b><b>:</b><b class="${b > a ? 'lead' : ''}">${b}</b><span class="lbl">4선승</span></div>
-    ${teamBlock(B, false)}
+    ${teamBlock(B, false, A)}
     ${games ? `<div class="games">${games}</div>` : ''}
     ${ctl}
     ${bracket()}
@@ -819,7 +894,7 @@ function vGal() {
       const [c1, c2] = COLORS[t.a] || ['#333', '#666'], o = teamOwned(t);
       return `<div class="gcard"><div class="ban" style="background:linear-gradient(120deg, ${c1} 0%, ${c1}cc 45%, #0d1320 100%)">
         <span class="bigab">${t.a}</span><div class="ico">${smallJersey(t.a)}</div>
-        <div class="meta"><small>${t.y} ${RES[t.r]} · ${CONF[t.c]} ${avgStars(t.s)}</small><b>${esc(t.n)}</b></div>
+        <div class="meta"><small>${t.y} ${RES[t.r]} · ${CONF[t.c]} ${avgStars(t.s)} ${styChip(topStyles(t.st)[0])}</small><b>${esc(t.n)}</b></div>
         <span class="cnt">${o} / 5 수집</span>${o === 5 ? '<span class="done">★ COMPLETE</span>' : ''}</div>
         <p class="desc">${describe(t)}</p>
         <div class="ros">${t.p.map(i => { const p = D.players[i]; return `<div class="${owns(i) ? '' : 'no'}"><small>${p.p}</small><b>${owns(i) ? esc(p.n.split(' ').slice(-1)[0]) : '???'}</b></div>`; }).join('')}</div></div>`;
@@ -937,6 +1012,7 @@ function act(a) {
   else if (a === 'skip') skipGames();
   else if (a === 'next') nextRound();
   else if (a === 'back-roster') go('roster');
+  else if (a.startsWith('style-')) { tour.rounds[tour.stage][0][0].style = a.slice(6); render(); }
   else if (a === 'free') startFree(false);
   else if (a === 'free-edit') { free.slots = draft.slots.slice(); startFree(true); free.pick = null; render(); }
   else if (a === 'frconfirm') freeConfirm();
