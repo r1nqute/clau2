@@ -36,6 +36,7 @@
   // 무작위 성장
   function randomDevelop(G, p, age) {
     let d = ageCurve(age);
+    if (age >= 29 && HM.Train && HM.Train.isTrainee(G, p.pid)) d += 0.8; // 유지 훈련
     const gap = p.pa - p.ovr;
     if (age <= 25 && gap > 0) d += gap * (age <= 21 ? 0.22 : 0.17);
     else if (age <= 27 && gap > 0) d += gap * 0.1;
@@ -59,7 +60,7 @@
       R.fitTo(p.a, p.t, p.o + diff * 0.68, p.d + diff * 0.32);
       P.update(p);
     }
-    void age;
+    if (HM.Train) HM.Train.applyBonus(p, age);
   }
 
   // 새 시즌 직전: 모든 선수 성장/노쇠

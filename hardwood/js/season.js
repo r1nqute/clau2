@@ -772,6 +772,7 @@
     G.logs = {}; G.logsSeason = G.season + 1;
     G.season++;
     const y = G.season;
+    if (HM.Train) { G.season--; HM.Train.seasonEnd(G); G.season++; }
     Prog.developAll(G);
     Prog.normalize(G);
     for (const p of Object.values(G.players)) {
@@ -794,7 +795,7 @@
   // 오늘 경기를 모두 치르고 하루를 넘긴다. userResult: 사용자가 생중계로 치른 결과
   function day(G, userResult, opts = {}) {
     const r = dayInner(G, userResult, opts);
-    if (r !== 'wait' && r !== 'roster') scanFA(G);
+    if (r !== 'wait' && r !== 'roster') { scanFA(G); if (HM.Train) HM.Train.tick(G); }
     return r;
   }
   function dayInner(G, userResult, opts = {}) {
@@ -948,6 +949,6 @@
   HM.Season = {
     calendar, genSchedule, setupSeason, standings, gamesBehind, userGameToday, day, makeGame, record, playGameQuick, afterPostseasonGame,
     startDraft, draftPlayer, draftUntilUser, finishDraft, endResign, newSeason, autoSet, autoDraftAll, autoResignUser,
-    watchList, shortlist, matchWatch, watchHits, watchSummary, scanFA, mgrSet, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
+    watchList, shortlist, matchWatch, watchHits, watchSummary, scanFA, mgrSet, injure, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
   };
 })();
