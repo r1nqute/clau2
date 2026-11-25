@@ -307,6 +307,9 @@
         l.gp++; l.gs += s.gs; l.min += s.min / 60;
         for (const k of KEYS) l[k] += s[k];
         const r = Sim.rating(s); s.rat = r; l.rat += r || 0;
+        // 경기별 기록(이번 시즌만 보관): [gid, tid, 선발, 분×10, 득점, 공리, 수리, 어시, 스틸, 블록, 턴오버, FGM, FGA, 3PM, 3PA, FTM, FTA, 파울, +/-, 평점×10]
+        if (!G.logs || G.logsSeason !== G.season) { G.logs = {}; G.logsSeason = G.season; }
+        (G.logs[s.pid] = G.logs[s.pid] || []).push([g.gid, side.tid, s.gs, Math.round(s.min / 6), s.pts, s.orb, s.drb, s.ast, s.stl, s.blk, s.tov, s.fgm, s.fga, s.tpm, s.tpa, s.ftm, s.fta, s.pf, s.pm, Math.round((r || 0) * 10)]);
         // 화제의 기록
         const reb = s.orb + s.drb;
         const dd = [s.pts, reb, s.ast, s.stl, s.blk].filter(x => x >= 10).length;
@@ -758,6 +761,7 @@
   }
 
   function newSeason(G) {
+    G.logs = {}; G.logsSeason = G.season + 1;
     G.season++;
     const y = G.season;
     Prog.developAll(G);

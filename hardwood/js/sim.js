@@ -550,7 +550,7 @@
     if (!s.min) return null;
     const gmsc = s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
     const perMin = s.min / 60;
-    return clamp(6.3 + gmsc / 7 + (s.pm || 0) / 40 - (perMin < 8 ? 0.2 : 0), 3.5, 10);
+    return clamp(6.0 + gmsc / 9 + (s.pm || 0) / 50 - (perMin < 8 ? 0.2 : 0), 3.5, 10);
   }
 
   HM.Sim = { Game, autoRotation, rating, shortName };

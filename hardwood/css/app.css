@@ -149,6 +149,10 @@ table.t .nm { font-weight: 700; }
 .a1 { color: var(--faint); } .a2 { color: var(--muted); } .a3 { color: var(--a3); } .a4 { color: var(--a4); } .a5 { color: var(--a5); }
 .av { font-weight: 800; }
 .stars { color: var(--a5); letter-spacing: -1px; white-space: nowrap; }
+.form { display: inline-flex; gap: 3px; vertical-align: middle; }
+.fchip { display: inline-block; min-width: 30px; text-align: center; font-size: 11px; font-weight: 800; padding: 1px 3px; border-radius: 4px; background: var(--panel3); font-variant-numeric: tabular-nums; }
+.fchip.loss { box-shadow: inset 0 -2px 0 var(--bad); }
+a.lnk .fchip { cursor: pointer; }
 .stars .off { color: var(--line); }
 .tpick .info .stars { color: var(--a5); font-size: 11px; }
 .tpick .info .stars .off { color: var(--line); }

@@ -123,6 +123,89 @@
   }
   App.tradeAllowed = tradeAllowed;
 
+  // ---------- 경기별 기록 ----------
+  const LOGK = ['gid', 'tid', 'gs', 'min10', 'pts', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta', 'pf', 'pm', 'rat10'];
+  let gameMapCache = null;
+  function gameMap(G) {
+    if (!gameMapCache || gameMapCache.n !== G.schedule.length || gameMapCache.s !== G.season || gameMapCache.G !== G) {
+      const m = new Map(); for (const g of G.schedule) m.set(g.gid, g);
+      gameMapCache = { m, n: G.schedule.length, s: G.season, G };
+    }
+    return gameMapCache.m;
+  }
+  // 선수의 이번 시즌 경기별 기록(옛 순서 → 최근 순서)
+  App.gameLog = (p, po) => {
+    const G = G_();
+    if (!G.logs || G.logsSeason !== G.season) return [];
+    const raw = G.logs[p.pid] || [];
+    const gm = gameMap(G);
+    const out = [];
+    for (const t of raw) {
+      const o = {}; LOGK.forEach((k, i) => { o[k] = t[i]; });
+      const g = gm.get(o.gid); if (!g) continue;
+      const isPo = g.type === 'po' ? 1 : 0;
+      if (po !== undefined && po !== null && isPo !== po) continue;
+      const home = g.h === o.tid;
+      o.g = g; o.date = g.date; o.home = home; o.opp = home ? g.a : g.h; o.type = g.type;
+      o.my = home ? g.hs : g.as; o.op = home ? g.as : g.hs; o.win = o.my > o.op;
+      o.min = o.min10 / 10; o.reb = o.orb + o.drb; o.rat = o.rat10 / 10;
+      out.push(o);
+    }
+    return out;
+  };
+  const ratCls = r => r >= 8 ? 'a5' : r >= 7 ? 'a4' : r >= 6.3 ? 'a3' : r >= 5.5 ? 'a2' : 'a1';
+  // 최근 폼: 마지막 n경기 평점 칩
+  App.formChips = (p, n = 5) => {
+    const lg = App.gameLog(p).slice(-n);
+    if (!lg.length) return '<span class="faint small">-</span>';
+    return `<span class="form" title="최근 ${lg.length}경기 평점">${lg.map(o => `<span class="fchip ${ratCls(o.rat)}${o.win ? '' : ' loss'}" title="${U.fmtDateShort(o.date)} ${o.home ? 'vs' : '@'} ${esc(G_().teams[o.opp].abbr)} · ${o.pts}점 ${o.reb}리 ${o.ast}어">${o.rat.toFixed(1)}</span>`).join('')}</span>`;
+  };
+  A.openLog = el => { App.ui.tabs.player = 'log'; App.go('#/player/' + el.dataset.pid); };
+
+  function logTab(p) {
+    const G = G_();
+    const po = App.ui.tabs.logPo === '1' ? 1 : 0;
+    const all = App.gameLog(p);
+    const lg = all.filter(o => (o.type === 'po' ? 1 : 0) === po);
+    const hasPo = all.some(o => o.type === 'po');
+    const toggle = `<div class="tabs" style="margin-bottom:10px"><button class="${po ? '' : 'on'}" data-act="tab" data-group="logPo" data-tab="0">정규시즌 ${all.length - all.filter(o => o.type === 'po').length}경기</button>${hasPo ? `<button class="${po ? 'on' : ''}" data-act="tab" data-group="logPo" data-tab="1">플레이오프 ${all.filter(o => o.type === 'po').length}경기</button>` : ''}</div>`;
+    if (!lg.length) return `<div class="card">${toggle}<div class="empty">${U.seasonLabel(G.season)} 시즌에 ${po ? '플레이오프' : ''} 출전한 경기가 아직 없습니다.<br><span class="small">경기별 기록은 이번 시즌 것만 보관합니다. 지난 시즌 합계는 '시즌·커리어 기록' 탭에 있습니다.</span></div></div>`;
+    const avg = arr => {
+      const n = arr.length || 1, t = {};
+      for (const k of ['min', 'pts', 'reb', 'ast', 'stl', 'blk', 'tov', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta', 'rat']) t[k] = arr.reduce((s2, o) => s2 + o[k], 0) / n;
+      return t;
+    };
+    const box = (title, arr) => { const a = avg(arr); return `<div class="card flat"><h3>${title}</h3><div class="row" style="gap:14px;align-items:baseline"><span><b style="font-size:20px">${a.pts.toFixed(1)}</b> <span class="small muted">득점</span></span><span><b>${a.reb.toFixed(1)}</b> <span class="small muted">리바</span></span><span><b>${a.ast.toFixed(1)}</b> <span class="small muted">어시</span></span></div>
+      <div class="small muted" style="margin-top:4px">${a.min.toFixed(1)}분 · FG ${App.pct(a.fgm, a.fga)}% · 3P ${App.pct(a.tpm, a.tpa)}% · 평점 <b class="${ratCls(a.rat)}">${a.rat.toFixed(2)}</b></div></div>`; };
+    const best = lg.reduce((m, o) => (!m || o.pts > m.pts || (o.pts === m.pts && o.rat > m.rat)) ? o : m, null);
+    const dd = lg.filter(o => [o.pts, o.reb, o.ast, o.stl, o.blk].filter(x => x >= 10).length >= 2).length;
+    const td = lg.filter(o => [o.pts, o.reb, o.ast, o.stl, o.blk].filter(x => x >= 10).length >= 3).length;
+    const w = lg.filter(o => o.win).length;
+    const summary = `<div class="grid g4" style="margin-bottom:12px">${box(`시즌 평균 · ${lg.length}경기`, lg)}${box('최근 5경기', lg.slice(-5))}${box('최근 10경기', lg.slice(-10))}
+      <div class="card flat"><h3>최고 경기</h3><div><b style="font-size:20px">${best.pts}점</b> ${best.reb}리 ${best.ast}어</div><div class="small muted" style="margin-top:4px">${U.fmtDateShort(best.date)} ${best.home ? 'vs' : '@'} ${esc(G.teams[best.opp].ko)} · 더블더블 ${dd}회${td ? ` · 트리플더블 ${td}회` : ''} · 출전 경기 ${w}승 ${lg.length - w}패</div></div></div>`;
+    const rows = lg.slice().reverse();
+    const tbl = App.table('plog', [
+      { k: 'date', label: '날짜', v: o => o.date + String(o.gid).padStart(6, '0'), f: o => `<span class="num">${U.fmtDateShort(o.date)}</span>` },
+      { k: 'opp', label: '상대', v: o => G.teams[o.opp].abbr, f: o => `${o.home ? 'vs' : '@'} ${App.tchip(G.teams[o.opp])}` },
+      { k: 'res', label: '결과', v: o => o.my - o.op, f: o => { const t = `<span class="pill ${o.win ? 'good' : 'bad'}">${o.win ? '승' : '패'}</span> <span class="num">${o.my}-${o.op}</span>${o.g.ot ? ' <span class="faint small">OT</span>' : ''}`; return G.games[o.gid] ? `<a class="lnk" href="#/game/${o.gid}">${t}</a>` : t; } },
+      { k: 'gs', label: '선발', cls: 'c', f: o => o.gs ? '●' : '' },
+      { k: 'min', label: '분', cls: 'r', f: o => Math.round(o.min) },
+      { k: 'pts', label: '득점', cls: 'r', f: o => `<b>${o.pts}</b>` },
+      { k: 'reb', label: '리바', cls: 'r' },
+      { k: 'ast', label: '어시', cls: 'r' },
+      { k: 'stl', label: '스틸', cls: 'r' },
+      { k: 'blk', label: '블록', cls: 'r' },
+      { k: 'tov', label: 'TO', cls: 'r' },
+      { k: 'fg', label: 'FG', cls: 'r', v: o => o.fga ? o.fgm / o.fga : -1, f: o => `${o.fgm}-${o.fga}` },
+      { k: 'tp', label: '3P', cls: 'r', v: o => o.tpm, f: o => `${o.tpm}-${o.tpa}` },
+      { k: 'ft', label: 'FT', cls: 'r', v: o => o.ftm, f: o => `${o.ftm}-${o.fta}` },
+      { k: 'pf', label: '파울', cls: 'r' },
+      { k: 'pm', label: '+/-', cls: 'r', f: o => (o.pm > 0 ? '+' : '') + o.pm },
+      { k: 'rat', label: '평점', cls: 'r', f: o => `<span class="av ${ratCls(o.rat)}">${o.rat.toFixed(1)}</span>` },
+    ], rows, { sort: { k: 'date', dir: -1 } });
+    return `<div class="card">${toggle}${summary}<div class="small muted" style="margin-bottom:6px">결과를 누르면 박스스코어를 봅니다(우리 팀 경기와 플레이오프만 보관).</div>${tbl}</div>`;
+  }
+
   // ---------- 선수단 ----------
   const ATTR_SHORT = { ins: '골밑', mid: '중거', tp: '3점', ft: '자유', pss: '패스', hdl: '핸들', orb: '공리', pdef: '외수', idef: '골수', stl: '스틸', blk: '블록', drb: '수리', iq: 'IQ', cmp: '침착', ldr: '리더', wrk: '성실', spd: '속도', ath: '운동', str: '근력', sta: '지구' };
   App.ATTR_SHORT = ATTR_SHORT;
@@ -177,6 +260,7 @@
         { k: 'reb', label: '리바', cls: 'r', v: p => { const l = App.line(p); return l && l.gp ? (l.orb + l.drb) / l.gp : null; }, f: p => { const l = App.line(p); return l && l.gp ? ((l.orb + l.drb) / l.gp).toFixed(1) : '-'; } },
         { k: 'ast', label: '어시', cls: 'r', v: p => { const l = App.line(p); return l && l.gp ? l.ast / l.gp : null; }, f: p => App.pg(App.line(p), 'ast') },
         { k: 'rat', label: '평점', cls: 'r', v: p => { const l = App.line(p); return l && l.gp ? l.rat / l.gp : null; }, f: p => { const l = App.line(p); return l && l.gp ? (l.rat / l.gp).toFixed(2) : '-'; } },
+        { k: 'form', label: '최근 폼', nosort: true, f: p => `<a class="lnk" data-act="openLog" data-pid="${p.pid}" title="경기별 기록 보기">${App.formChips(p)}</a>` },
         { k: 'mor', label: '상태', cls: 'c', nosort: true, f: p => App.moraleTag(p) },
       ]);
     }
@@ -261,16 +345,17 @@
       ${prospect}
       <div class="row" style="margin-top:12px">${acts.join('')}</div>
     </div>
-    <div class="grid g3" style="margin-top:14px">
+    ${(() => { const ptab = App.ui.tabs.player || 'ov'; const nLog = App.gameLog(p).length; return `<div class="tabs" style="margin-top:14px">${[['ov', '개요'], ['log', `경기별 기록${nLog ? ' ' + nLog : ''}`], ['car', '시즌·커리어 기록']].map(([k, l]) => `<button class="${ptab === k ? 'on' : ''}" data-act="tab" data-group="player" data-tab="${k}">${l}</button>`).join('')}</div>`; })()}
+    ${(App.ui.tabs.player || 'ov') === 'log' ? logTab(p) : (App.ui.tabs.player || 'ov') === 'car' ? `${statRows ? `<div class="card"><h2>게임 속 기록</h2><div class="tw"><table class="t"><thead><tr><th>시즌</th><th>팀</th><th class="r">경기</th><th class="r">분</th><th class="r">득점</th><th class="r">리바</th><th class="r">어시</th><th class="r">스틸</th><th class="r">블록</th><th class="r">FG%</th><th class="r">3P%</th><th class="r">FT%</th><th class="r">평점</th></tr></thead><tbody>${statRows}</tbody></table></div></div>` : '<div class="card"><div class="empty">아직 게임 속 기록이 없습니다.</div></div>'}${real}` : `
+    ${App.gameLog(p).length ? `<div class="card" style="margin-bottom:14px"><div class="row"><h2 style="margin:0">최근 폼</h2>${App.formChips(p, 10)}<span class="sp"></span><button class="btn sm" data-act="tab" data-group="player" data-tab="log">경기별 기록 보기 →</button></div></div>` : ''}
+    <div class="grid g3">
       <div class="card span2"><h2>능력치</h2><div class="attrs">${attrs}</div></div>
       <div class="card"><h2>플레이 성향</h2>${tend}
         <h2 style="margin-top:14px">공헌도</h2><div class="kv small"><span>공격(BPM 환산)</span><span>${p.o >= 0 ? '+' : ''}${p.o.toFixed(1)}</span><span>수비(BPM 환산)</span><span>${p.d >= 0 ? '+' : ''}${p.d.toFixed(1)}</span></div>
         ${Object.keys(gameAw).length ? `<h2 style="margin-top:14px">게임 속 수상</h2><div class="row">${awHtml(gameAw)}</div>` : ''}
         ${Object.keys(cnt).length ? `<h2 style="margin-top:14px">실제 수상(시작 이전)</h2><div class="row">${awHtml(cnt)}</div>` : ''}
       </div>
-    </div>
-    ${statRows ? `<div class="card" style="margin-top:14px"><h2>게임 속 기록</h2><div class="tw"><table class="t"><thead><tr><th>시즌</th><th>팀</th><th class="r">경기</th><th class="r">분</th><th class="r">득점</th><th class="r">리바</th><th class="r">어시</th><th class="r">스틸</th><th class="r">블록</th><th class="r">FG%</th><th class="r">3P%</th><th class="r">FT%</th><th class="r">평점</th></tr></thead><tbody>${statRows}</tbody></table></div></div>` : ''}
-    ${real}`;
+    </div>`}`;
   };
   A.tradeWith = el => {
     const G = G_(); const p = G.players[+el.dataset.pid];
