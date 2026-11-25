@@ -152,26 +152,123 @@
     void cy;
   };
 
-  // ---------- 자유계약 ----------
+  // ---------- 자유계약: 시장 · 예정 FA · 관심 선수 · 알림 조건 ----------
+  const FKEYS = ['pos', 'minOvr', 'minPot', 'minAge', 'maxAge', 'maxAsk', 'attr', 'attrMin'];
+  function faf() { return App.ui.faf || (App.ui.faf = {}); }
+  // 화면의 거르기 값을 알림 조건 모양으로
+  function filterAsWatch() {
+    const f = faf(), w = {};
+    if (f.pos) w.pos = [f.pos];
+    for (const k of ['minOvr', 'minPot', 'minAge', 'maxAge', 'maxAsk', 'attrMin']) if (f[k] !== undefined && f[k] !== '' && +f[k] > 0) w[k] = +f[k];
+    if (f.attr && w.attrMin) w.attr = f.attr; else delete w.attrMin;
+    return w;
+  }
+  const hasFilter = () => Object.keys(filterAsWatch()).length > 0;
+  App.isShort = pid => Season.shortlist(G_()).includes(pid);
+  const starBtn = p => `<button class="btn sm" data-act="shortTog" data-pid="${p.pid}" title="관심 선수">${App.isShort(p.pid) ? '★' : '☆'}</button>`;
+  const bellOf = p => { const why = Season.watchHits(G_(), p).filter(x => !x.startsWith('★')); return why.length ? `<span class="pill warn" title="${esc(why.join(', '))}">🔔</span>` : ''; };
+
+  function filterBar() {
+    const f = faf();
+    const num = (k, ph, w = 74) => `<input type="number" id="faf-${k}" inputmode="numeric" placeholder="${ph}" style="width:${w}px" value="${esc(f[k] ?? '')}" data-change="fafSet" data-k="${k}">`;
+    return `<div class="card" style="margin-bottom:12px"><div class="row" style="gap:10px">
+      <select id="faf-pos" data-change="fafSet" data-k="pos"><option value="">모든 포지션</option>${R.POS.map(x => `<option value="${x}" ${f.pos === x ? 'selected' : ''}>${x} · ${R.POS_KO[x]}</option>`).join('')}</select>
+      <label class="row small" style="gap:4px">능력 ${num('minOvr', '최소')}</label>
+      <label class="row small" style="gap:4px">잠재력 ${num('minPot', '최소')}</label>
+      <label class="row small" style="gap:4px">나이 ${num('minAge', '부터', 64)}~${num('maxAge', '까지', 64)}</label>
+      <label class="row small" style="gap:4px">요구 연봉 ${num('maxAsk', '$M 이하', 84)}</label>
+      <label class="row small" style="gap:4px"><select id="faf-attr" data-change="fafSet" data-k="attr"><option value="">능력치 조건 없음</option>${R.ATTRS.map(([k, l]) => `<option value="${k}" ${f.attr === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${num('attrMin', '1~20', 64)}이상</label>
+      <span class="sp"></span>
+      <button class="btn sm" data-act="fafReset">초기화</button>
+      <button class="btn sm pri" data-act="watchFromFilter" ${hasFilter() ? '' : 'disabled'}>🔔 이 조건으로 알림 받기</button>
+    </div></div>`;
+  }
+  A.fafSet = el => { faf()[el.dataset.k] = el.value; App.rerender(); };
+  A.fafReset = () => { App.ui.faf = {}; App.rerender(); };
+  A.watchFromFilter = () => {
+    const G = G_(); const w = filterAsWatch();
+    if (!Object.keys(w).length) return;
+    w.id = Date.now(); w.on = true; w.name = Season.watchSummary(w);
+    Season.watchList(G).push(w);
+    const now = L.fas(G).filter(p => Season.matchWatch(G, p, w)).length;
+    App.toast(`알림 조건을 저장했습니다${now ? ` · 지금 시장에 맞는 선수 ${now}명` : ''}`, 3000);
+    App.autosave(); App.rerender();
+  };
+  A.shortTog = el => {
+    const G = G_(); const list = Season.shortlist(G); const pid = +el.dataset.pid;
+    const i = list.indexOf(pid);
+    if (i >= 0) list.splice(i, 1); else list.push(pid);
+    App.toast(i >= 0 ? '관심 선수에서 뺐습니다' : '관심 선수로 등록했습니다. 시장에 나오면 알려 드립니다', 2600);
+    App.autosave(); App.rerender();
+  };
+  A.watchTog = el => { const w = Season.watchList(G_()).find(x => x.id === +el.dataset.id); if (w) w.on = el.checked; App.autosave(); App.rerender(); };
+  A.watchDel = el => { const G = G_(); G.watch = Season.watchList(G).filter(x => x.id !== +el.dataset.id); App.autosave(); App.rerender(); };
+  A.watchName = el => { const w = Season.watchList(G_()).find(x => x.id === +el.dataset.id); if (w) w.name = el.value.trim() || Season.watchSummary(w); App.autosave(); };
+  A.watchShow = el => {
+    const w = Season.watchList(G_()).find(x => x.id === +el.dataset.id); if (!w) return;
+    App.ui.faf = { pos: w.pos && w.pos[0] || '', minOvr: w.minOvr || '', minPot: w.minPot || '', minAge: w.minAge || '', maxAge: w.maxAge || '', maxAsk: w.maxAsk || '', attr: w.attr || '', attrMin: w.attrMin || '' };
+    App.ui.tabs.fa = 'market'; App.rerender();
+  };
+  A.watchStopTog = el => { Season.autoSet(G_()).watchStop = el.checked; App.autosave(); };
+
   S.fa = () => {
     const G = G_();
     const cy = AI.capYear(G);
-    const fas = L.fas(G);
     const room = AI.capRoom(G, G.userTid);
     const n = L.roster(G, G.userTid).length;
-    const tbl = App.table('fa', [
-      { k: 'name', label: '이름', f: p => `${App.plink(p)} ${App.injTag(p)}`, v: p => p.name },
+    const watch = Season.watchList(G), short = Season.shortlist(G);
+    const tab = App.ui.tabs.fa || 'market';
+    const fw = filterAsWatch();
+    const pass = p => Season.matchWatch(G, p, fw);
+    const fas = L.fas(G);
+    const soon = Object.values(G.players).filter(p => p.tid >= 0 && p.tid !== G.userTid && p.contract && p.contract.exp <= G.season);
+    const tabs = [['market', `시장 ${fas.length}`], ['soon', `예정 FA ${soon.length}`], ['short', `★ 관심 선수 ${short.length}`], ['watch', `🔔 알림 조건 ${watch.filter(w => w.on !== false).length}`]];
+    const base = [
+      { k: 'name', label: '이름', f: p => `${App.isShort(p.pid) ? '<span class="stars">★</span> ' : ''}${App.plink(p)} ${bellOf(p)} ${App.injTag(p)}`, v: p => p.name },
       { k: 'pos', label: '포지션', cls: 'c' },
       { k: 'age', label: '나이', cls: 'r', v: p => P.age(p, cy), f: p => P.age(p, cy) },
       { k: 'ovr', label: '능력', cls: 'c', v: p => p.ovr, f: p => App.ovr(p.ovr) },
-      { k: 'pot', label: '잠재력', cls: 'c', v: p => P.potShown(p, G), f: p => App.stars(P.potShown(p, G)) },
-      { k: 'ask', label: '요구 연봉', cls: 'r', v: p => AI.asking(G, p).amt, f: p => { const a = AI.asking(G, p); return `${U.money(a.amt)} × ${a.yrs}년`; } },
-      { k: 'int', label: '우리 팀 관심', cls: 'c', v: p => AI.teamAppeal(G, G.userTid, p), f: p => { const v = AI.teamAppeal(G, G.userTid, p); return v > 0.08 ? '<span class="pill good">높음</span>' : v > -0.02 ? '<span class="pill">보통</span>' : '<span class="pill bad">낮음</span>'; } },
-      { k: 'act', label: '', nosort: true, f: p => `<button class="btn sm pri" data-act="negotiate" data-pid="${p.pid}">협상</button>` },
-    ], fas, { sort: { k: 'ovr', dir: -1 }, limit: 150 });
+      { k: 'pot', label: '잠재력', cls: 'c', v: p => P.potShown(p, G), f: p => `${App.stars(P.potShown(p, G))} <span class="faint small">${P.potShown(p, G)}</span>` },
+    ];
+    const attrCol = fw.attr ? [{ k: 'attrv', label: R.LABEL[fw.attr], cls: 'c', v: p => p.a[fw.attr], f: p => { const v = R.disp(p.a[fw.attr]); return `<span class="av ${R.attrClass(v)}">${v}</span>`; } }] : [];
+    let body = '';
+    if (tab === 'market') {
+      const list = fas.filter(pass);
+      body = filterBar() + `<div class="card flat" style="padding:6px">${App.table('fa', base.concat(attrCol, [
+        { k: 'ask', label: '요구 연봉', cls: 'r', v: p => AI.asking(G, p).amt, f: p => { const a = AI.asking(G, p); return `${U.money(a.amt)} × ${a.yrs}년`; } },
+        { k: 'int', label: '우리 팀 관심', cls: 'c', v: p => AI.teamAppeal(G, G.userTid, p), f: p => { const v = AI.teamAppeal(G, G.userTid, p); return v > 0.08 ? '<span class="pill good">높음</span>' : v > -0.02 ? '<span class="pill">보통</span>' : '<span class="pill bad">낮음</span>'; } },
+        { k: 'act', label: '', nosort: true, f: p => `${starBtn(p)} <button class="btn sm pri" data-act="negotiate" data-pid="${p.pid}">협상</button>` },
+      ]), list, { sort: { k: 'ovr', dir: -1 }, limit: 150 })}</div><p class="small muted" style="margin-top:6px">${list.length}명${hasFilter() ? ` (조건에 맞는 선수 / 전체 ${fas.length}명)` : ''} · 🔔는 저장한 알림 조건에 맞는 선수</p>`;
+    } else if (tab === 'soon') {
+      const list = soon.filter(pass);
+      body = filterBar() + `<p class="small muted">${U.seasonLabel(G.season)} 시즌이 끝나면 계약이 끝나는 다른 팀 선수들입니다. 재계약하지 못하면 시장에 나옵니다. ☆로 관심 선수에 넣어 두면 시장에 나오는 날 알려 드립니다.</p>
+        <div class="card flat" style="padding:6px">${App.table('soon', base.concat(attrCol, [
+        { k: 'team', label: '현재 팀', f: p => `${App.tchip(G.teams[p.tid])}`, v: p => G.teams[p.tid].abbr },
+        { k: 'amt', label: '현재 연봉', cls: 'r', v: p => p.contract.amt, f: p => U.money(p.contract.amt) },
+        { k: 'act', label: '', nosort: true, f: p => starBtn(p) },
+      ]), list, { sort: { k: 'ovr', dir: -1 }, limit: 150 })}</div>`;
+    } else if (tab === 'short') {
+      const list = short.map(id => G.players[id]).filter(p => p && p.tid !== -3);
+      body = `<p class="small muted">관심 선수는 어느 팀 선수든 등록할 수 있습니다(선수 화면의 ☆ 단추). 그 선수가 자유계약 시장에 나오면 받은 편지함으로 알려 드립니다.</p>
+        <div class="card flat" style="padding:6px">${App.table('short', base.concat([
+        { k: 'team', label: '소속', f: p => p.tid >= 0 ? App.tchip(G.teams[p.tid]) : p.tid === -1 ? '<span class="pill good">FA 시장</span>' : '<span class="pill">드래프트 후보</span>', v: p => p.tid },
+        { k: 'exp', label: '계약 만료', cls: 'r', v: p => p.contract?.exp || 0, f: p => p.contract ? U.seasonLabel(p.contract.exp) + (p.contract.exp <= G.season && p.tid >= 0 ? ' <span class="pill warn">올해 만료</span>' : '') : '-' },
+        { k: 'act', label: '', nosort: true, f: p => `${p.tid === -1 ? `<button class="btn sm pri" data-act="negotiate" data-pid="${p.pid}">협상</button> ` : ''}<button class="btn sm" data-act="shortTog" data-pid="${p.pid}">빼기</button>` },
+      ]), list, { sort: { k: 'ovr', dir: -1 } })}</div>`;
+    } else {
+      const A2 = Season.autoSet(G);
+      body = filterBar() + `<div class="card">
+        <h2>저장한 알림 조건 <span class="r"><label class="row" style="gap:6px"><input type="checkbox" id="watchStop" ${A2.watchStop ? 'checked' : ''} data-change="watchStopTog"> 알림이 오면 진행 멈추기</label></span></h2>
+        <p class="small muted">위에서 조건(포지션·능력·잠재력·나이·요구 연봉·능력치)을 고른 뒤 <b>🔔 이 조건으로 알림 받기</b>를 누르세요. 조건에 맞는 선수가 시장에 새로 나오면 받은 편지함으로 알려 드립니다. 재계약 결렬, 방출, 드래프트 미지명, 실제 선수 합류 때 모두 확인합니다.</p>
+        ${watch.length ? `<div class="grid" style="margin-top:8px">${watch.map(w => { const now = L.fas(G).filter(p => Season.matchWatch(G, p, w)).length; return `<div class="row" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2);gap:10px">
+          <input type="checkbox" id="w-on-${w.id}" ${w.on !== false ? 'checked' : ''} data-change="watchTog" data-id="${w.id}" title="켜기/끄기">
+          <div style="flex:1;min-width:180px"><input type="text" id="w-name-${w.id}" value="${esc(w.name)}" data-change="watchName" data-id="${w.id}" style="width:100%;font-weight:700"><div class="small muted" style="margin-top:4px">${esc(Season.watchSummary(w))}</div></div>
+          <button class="btn sm" data-act="watchShow" data-id="${w.id}">지금 시장 ${now}명 보기</button><button class="btn sm danger" data-act="watchDel" data-id="${w.id}">삭제</button></div>`; }).join('')}</div>` : '<div class="empty">아직 저장한 알림 조건이 없습니다.</div>'}
+      </div>`;
+    }
     return `<div class="row"><h1>자유계약</h1><span class="sp"></span><span class="pill">${n}/15명</span><span class="pill ${room > 0 ? 'good' : ''}">캡 여유 ${U.money(Math.max(0, room))}</span>${cy >= 1999 ? `<span class="pill">미드레벨 ${G.teams[G.userTid].mleUsed ? '사용함' : U.money(F.mle(cy))}</span>` : ''}<span class="pill">최저 ${U.money(F.minSal(cy))}</span></div>
       ${G.phase === 'fa' ? '<p class="small muted">자유계약 시장 기간입니다. 다른 팀도 매일 선수를 데려갑니다. 좋은 선수는 빨리 움직이세요.</p>' : '<p class="small muted">시즌 중에도 남은 자유계약 선수와 계약할 수 있습니다.</p>'}
-      <div class="card flat" style="padding:6px">${tbl}</div>`;
+      <div class="tabs">${tabs.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="tab" data-group="fa" data-tab="${k}">${l}</button>`).join('')}</div>${body}`;
   };
 
   // ---------- 드래프트 ----------
@@ -279,5 +376,5 @@
     ${hist.length ? `<div class="card" style="margin-top:14px"><h2>지난 시즌 수입·지출</h2><div class="tw"><table class="t"><thead><tr><th>시즌</th><th class="r">수입</th><th class="r">지출(연봉+사치세)</th><th class="r">손익</th></tr></thead><tbody>${hist.map(([y, r]) => `<tr><td>${U.seasonLabel(+y)}</td><td class="r">${U.money(r.rev)}</td><td class="r">${U.money(r.expense)}</td><td class="r" style="color:${r.rev - r.expense >= 0 ? 'var(--good)' : 'var(--bad)'}">${U.money(r.rev - r.expense)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
     <p class="note" style="margin-top:12px">금액은 실제 계약이 아니라 선수 능력과 그 시즌의 실제 샐러리캡으로 추정했습니다. 캡을 넘은 팀은 버드 권리(자기 선수 재계약), 미드레벨 예외(1999년~), 최저 연봉 계약으로만 선수를 더할 수 있습니다.</p>`;
   };
-  A.letGo = el => { const G = G_(); const p = G.players[+el.dataset.pid]; p.lastTid = G.userTid; p.tid = -1; p.contract = null; App.toast(`${p.name}을(를) 보냈습니다`); App.rerender(); };
+  A.letGo = el => { const G = G_(); const p = G.players[+el.dataset.pid]; p.lastTid = G.userTid; p.tid = -1; p.contract = null; if (G.faSeen) G.faSeen[p.pid] = 1; App.toast(`${p.name}을(를) 보냈습니다`); App.rerender(); };
 })();

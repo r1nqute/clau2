@@ -261,7 +261,13 @@
         if (team) p.injury = { type: '시즌 결장(장기 부상·개인 사정)', days: 230, out: true };
         minutesIn[p.pid] = 300;
       } else if (Y === d.last && prev[19] <= 34 && prev[8] * prev[10] / 10 > 300) {
-        makeReal(G, rid, prev, -1); // 최신 시즌: 아직 기록이 없는 선수는 자유계약으로
+        // 최신 시즌: 아직 기록이 없는 선수. 신인 계약 중이면 지난 시즌 팀에 남기고, 나머지는 자유계약으로
+        const lastAbbr = prev[1].split('/').pop();
+        const team = byFr[(d.seasons[Y - 1]?.teams.find(r => r[0] === lastAbbr) || [])[2]];
+        const bio = d.players[rid];
+        const rookieDeal = bio && bio[8] && bio[8][1] === 1 && bio[8][0] >= Y - 4;
+        const p = makeReal(G, rid, prev, rookieDeal && team ? team.tid : -1);
+        if (rookieDeal && team) minutesIn[p.pid] = prev[8] * prev[10] / 10 * 0.8;
       }
     }
     // 직전 드래프트에서 뽑혔지만 아직 기록이 없는 신인(최신 드래프트)

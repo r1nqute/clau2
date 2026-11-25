@@ -7,7 +7,7 @@
   const D = () => globalThis.HM_DATA;
   const G_ = () => App.G;
 
-  const ICON = { info: 'ℹ️', board: '🏛️', injury: '🩹', season: '🏀', award: '🏅', draft: '🎓', contract: '✍️', offer: '🔄', complaint: '😠', champ: '🏆' };
+  const ICON = { info: 'ℹ️', board: '🏛️', injury: '🩹', season: '🏀', award: '🏅', draft: '🎓', contract: '✍️', offer: '🔄', complaint: '😠', champ: '🏆', scout: '🔔' };
 
   // ---------- 홈 ----------
   S.home = () => {
@@ -86,6 +86,10 @@
     if (sel && !sel.read) { sel.read = true; setTimeout(() => { const b = document.querySelector('.nav a[href="#/inbox"] .badge'); const n = G.inbox.filter(m => !m.read).length; if (b) { if (n) b.textContent = n; else b.remove(); } }, 0); }
     let actions = '';
     if (sel && sel.type === 'offer' && !sel.done) actions = `<div class="row" style="margin-top:14px"><button class="btn pri" data-act="offerAccept" data-id="${sel.id}">수락</button><button class="btn" data-act="offerDecline" data-id="${sel.id}">거절</button><button class="btn" data-act="offerEdit" data-id="${sel.id}">트레이드 화면에서 수정</button></div>`;
+    if (sel && sel.type === 'scout' && sel.pids) {
+      const still = sel.pids.map(id => G.players[id]).filter(p => p && p.tid === -1);
+      actions += still.length ? `<div class="row" style="margin-top:14px">${still.map(p => `<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">${esc(p.name)} 협상</button>`).join('')}<a class="btn" href="#/fa">자유계약 화면</a></div>` : '<div class="note" style="margin-top:12px">이 선수들은 이미 시장을 떠났습니다.</div>';
+    }
     if (sel && sel.pid && G.players[sel.pid]) actions += `<div style="margin-top:12px"><a class="btn" href="#/player/${sel.pid}">선수 정보</a></div>`;
     return `<h1>받은 편지함</h1>
     <div class="inbox">
@@ -197,6 +201,7 @@
     const ok = await App.confirm('선수 방출', `${esc(p.name)} 선수를 방출할까요?${remain > 0 ? `<br>남은 연봉 ${U.money(remain)}은 계약 만료까지 샐러리캡에 남습니다.` : ''}`, '방출');
     if (!ok) return;
     AI.release(G, p);
+    if (G.faSeen) G.faSeen[p.pid] = 1;
     Season.news(G, `${p.name}, ${G.teams[G.userTid].ko}에서 방출`, { type: 'fa' });
     App.toast(`${p.name} 방출`); App.rerender();
   };
@@ -236,6 +241,7 @@
       acts.push(`<button class="btn danger" data-act="release" data-pid="${p.pid}">방출</button>`);
     } else if (p.tid >= 0) acts.push(`<button class="btn pri" data-act="tradeWith" data-pid="${p.pid}">트레이드 제안</button>`);
     else if (p.tid === -1) acts.push(`<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">계약 제안</button>`);
+    if (!own && p.tid !== -3) acts.push(`<button class="btn" data-act="shortTog" data-pid="${p.pid}">${App.isShort(p.pid) ? '★ 관심 선수 해제' : '☆ 관심 선수로 등록'}</button>`);
     const prospect = p.tid === -2 ? `<div class="note" style="margin-top:10px">🎓 ${p.prospect.year} 드래프트 후보${p.prospect.realPick ? ` · <span data-spoil>실제 역사: ${p.prospect.realRound}라운드 ${p.prospect.realPick}순위 (${esc(p.prospect.realTeam)})</span>` : ''}</div>` : '';
     return `
     <div class="card">
@@ -562,6 +568,7 @@
         ${tog('halftime', '생중계 하프타임 정지', '하프타임에 잠깐 멈춥니다.')}
         ${tog('offers', 'AI 트레이드 제안 받기', '끄면 다른 구단이 제안을 보내지 않습니다.')}
         ${tog('minorInjury', '가벼운 부상 알림', '끄면 7일 이상 결장하는 부상만 알립니다.')}
+        ${tog('watchStop', '관심 FA 알림 때 멈추기', '자유계약 화면에서 저장한 조건이나 ★ 관심 선수가 시장에 나오면 진행을 멈춥니다.')}
       </div></div>`;
   };
   A.autoTog = el => { Season.autoSet(G_())[el.dataset.k] = el.checked; App.toast('설정을 바꿨습니다'); App.autosave(); };

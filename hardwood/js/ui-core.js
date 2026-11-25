@@ -120,7 +120,7 @@
     const unread = G.inbox.filter(m => !m.read).length;
     const r = L.rec(G, G.userTid);
     const nav = NAV.map(n => n === 'sep' ? '<div class="sep"></div>' :
-      `<a href="#/${n[0]}" class="${App.route.name === n[0] ? 'on' : ''}"><span class="ic">${n[1]}</span>${n[2]}${n[0] === 'inbox' && unread ? `<span class="badge">${unread}</span>` : ''}${n[0] === 'draft' && G.phase === 'draft' ? '<span class="badge">!</span>' : ''}${n[0] === 'finance' && G.phase === 'resign' ? '<span class="badge">!</span>' : ''}</a>`).join('');
+      `<a href="#/${n[0]}" class="${App.route.name === n[0] ? 'on' : ''}"><span class="ic">${n[1]}</span>${n[2]}${n[0] === 'inbox' && unread ? `<span class="badge">${unread}</span>` : ''}${n[0] === 'draft' && G.phase === 'draft' ? '<span class="badge">!</span>' : ''}${n[0] === 'finance' && G.phase === 'resign' ? '<span class="badge">!</span>' : ''}${n[0] === 'fa' && G.inbox.some(m => m.type === 'scout' && !m.read) ? '<span class="badge">🔔</span>' : ''}</a>`).join('');
     const contLabel = App.contLabel();
     return `
     <div id="app">
@@ -301,9 +301,11 @@
         const ok = await App.confirm('자유계약 시장으로', `재계약하지 않은 선수 ${exp.length}명(${exp.map(p => esc(p.name)).join(', ')})은 자유계약 선수가 됩니다. 계속할까요?`, '계속');
         if (!ok) return;
       }
+      const sb = G.inbox.filter(m => m.type === 'scout').length;
       Season.endResign(G);
       App.autosave();
-      if (!A.fa) return App.go('#/fa');
+      const fresh = G.inbox.filter(m => m.type === 'scout').length > sb;
+      if (!A.fa || (fresh && A.watchStop)) { App.go('#/fa'); if (fresh) App.scoutModal(); return; }
     }
     App.running = true;
     const startPhase = G.phase, startSeason = G.season;
@@ -314,6 +316,8 @@
     let days = 0, lastYield = Date.now();
     let w = 0, l = 0;
     const offersBefore = G.inbox.filter(m => m.type === 'offer' && !m.done).length;
+    const scoutBefore = G.inbox.filter(m => m.type === 'scout').length;
+    const scoutNew = () => G.inbox.filter(m => m.type === 'scout').length > scoutBefore;
     const countGame = () => {
       const g = G.lastUserGame && G.schedule.find(x => x.gid === G.lastUserGame);
       if (g && g.played && g !== countGame.last) { countGame.last = g; const home = g.h === G.userTid; if ((home ? g.hs : g.as) > (home ? g.as : g.hs)) w++; else l++; }
@@ -348,6 +352,7 @@
           if (mode === 'offseason' && ph === 'regular') keep = false;
           if (!keep) break;
         }
+        if (A.watchStop && scoutNew()) { stopReason = 'scout'; break; }
         if (mode === 'deadline' && G.date > G.cal.deadline) break;
         if (mode === 'next' && G.phase === 'fa' && !A.fa && days >= 1) break;
         if (days >= limit) break;
@@ -370,6 +375,7 @@
       return;
     }
     if (w + l > 1) App.toast(`${days}일 진행 · 우리 팀 ${w}승 ${l}패`, 3000);
+    if (stopReason === 'scout' || (A.watchStop && scoutNew() && !stopReason)) { App.rerender(); return App.scoutModal(); }
     if (stopReason && stopReason.game) { App.render(); return App.startUserGame(stopReason.game); }
     if (G.phase === 'draft' && startPhase !== 'draft') return App.go('#/draft');
     if (G.phase === 'resign' && startPhase !== 'resign') return App.go('#/finance');
@@ -379,6 +385,15 @@
     App.rerender();
   };
   App.acts.goSquad = () => { App.closeModal(); App.go('#/squad'); };
+  // 관심 FA 알림 창
+  App.scoutModal = () => {
+    const G = App.G;
+    const m = G.inbox.find(x => x.type === 'scout');
+    if (!m) return;
+    m.read = true;
+    App.modal('🔔 관심 FA가 시장에 나왔습니다', `<div class="mbody">${m.body}</div>`,
+      `<button class="btn" data-act="cont" data-mode="next">계속 진행</button><a class="btn pri" href="#/fa" data-act="closeModalGo">자유계약 화면으로</a>`);
+  };
 
   // 받은 편지함 읽지 않은 중요 메시지
   App.markRead = id => { const m = App.G.inbox.find(x => x.id === id); if (m) m.read = true; };

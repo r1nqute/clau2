@@ -102,6 +102,7 @@
       const G = L.create({ startYear: sel.year, userAbbr: sel.abbr, managerName: (sel.name || '').trim() || '감독', prog: sel.prog });
       Season.setupSeason(G, true);
       Season.welcome(G);
+      Season.scanFA(G);
       App.G = G;
       App.ui = { sorts: {}, tabs: {} };
       await App.save(true);
