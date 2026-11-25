@@ -108,3 +108,7 @@ tools/            그림·지도 확인용 쪽, 아티팩트용 변환
 ## 글꼴
 
 [Galmuri](https://github.com/quiple/galmuri) (Galmuri11, Galmuri9) — Copyright (c) 2019–2025 Lee Minseo. SIL Open Font License 1.1에 따라 `assets/fonts/`에 함께 넣었다.
+
+## 같은 저장소의 다른 게임
+
+- [`hardwood/`](hardwood/) — **하드우드 매니저**: 실제 NBA 역사(1977-78 ~ 2026-27) 위에서 구단을 맡는 농구 감독 시뮬레이션(FM식).
