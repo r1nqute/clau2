@@ -235,7 +235,7 @@
   }
 
   // AI 팀들이 자유계약 선수와 계약(하루치). 좋은 선수부터 자기에게 맞는 팀을 고른다.
-  function faDay(G, intensity = 1) {
+  function faDay(G, intensity = 1, includeUser = false) {
     const cy = capYear(G);
     const signed = [];
     const perTeam = {};
@@ -248,7 +248,7 @@
       const ask = asking(G, p);
       const cands = [];
       for (const t of G.teams) {
-        if (t.tid === G.userTid || (perTeam[t.tid] || 0) >= 2) continue;
+        if ((t.tid === G.userTid && !includeUser) || (perTeam[t.tid] || 0) >= 2) continue;
         const dep = depthOf[t.tid];
         const n = dep.length;
         const worst = dep[n - 1];
@@ -273,7 +273,7 @@
     }
     // 아무도 데려가지 않는 선수: 최저 연봉으로라도(로스터 13명 미만 팀)
     for (const t of G.teams) {
-      if (t.tid === G.userTid) continue;
+      if (t.tid === G.userTid && !includeUser) continue;
       if (L.roster(G, t.tid).length < 13 && Math.random() < 0.5 * intensity) {
         const p = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
         if (p) { sign(G, p, t.tid, Math.max(F.minSal(cy), Math.min(asking(G, p).amt, F.minSal(cy) * 2)), 1); signed.push({ p, t, amt: p.contract.amt }); }
@@ -283,26 +283,30 @@
     return signed;
   }
 
-  // 재계약(AI). 반환: 떠난 선수 목록
+  // 재계약: 한 팀의 만료 선수를 정한다. 반환: { kept, left }
+  function resignTeam(G, t) {
+    const y = G.season;
+    const kept = [], left = [];
+    const exp = L.roster(G, t.tid).filter(p => p.contract && p.contract.exp <= y);
+    for (const p of exp.sort((a, b) => b.ovr - a.ovr)) {
+      const ask = asking(G, p);
+      const age = P.age(p, y + 1);
+      const v = value(G, p, t.tid, { noContract: true });
+      const worth = F.cap(y + 1) * F.shareFor(p.ovr + (age <= 24 ? (p.pa - p.ovr) * 0.4 : 0));
+      const tax = F.taxLine(y + 1);
+      const pay = F.payroll(G, t.tid, y + 1);
+      const want = ask.amt <= worth * 1.15 && (pay + ask.amt <= tax * 1.08 || p.ovr >= 86) && v > 0.2;
+      if (want && Math.random() < 0.85 && offerScore(G, p, t.tid, ask.amt, ask.yrs) >= 0.95) {
+        p.contract = { amt: ask.amt, exp: y + ask.yrs };
+        kept.push(p);
+      } else { p.lastTid = t.tid; p.tid = -1; p.contract = null; left.push(p); }
+    }
+    return { kept, left };
+  }
+  // AI 팀 전체 재계약. 반환: 떠난 선수 목록
   function aiResign(G) {
     const left = [];
-    const y = G.season;
-    for (const t of G.teams) {
-      if (t.tid === G.userTid) continue;
-      const exp = L.roster(G, t.tid).filter(p => p.contract && p.contract.exp <= y);
-      for (const p of exp.sort((a, b) => b.ovr - a.ovr)) {
-        const ask = asking(G, p);
-        const age = P.age(p, y + 1);
-        const v = value(G, p, t.tid, { noContract: true });
-        const worth = F.cap(y + 1) * F.shareFor(p.ovr + (age <= 24 ? (p.pa - p.ovr) * 0.4 : 0));
-        const tax = F.taxLine(y + 1);
-        const pay = F.payroll(G, t.tid, y + 1);
-        const want = ask.amt <= worth * 1.15 && (pay + ask.amt <= tax * 1.08 || p.ovr >= 86) && v > 0.2;
-        if (want && Math.random() < 0.85 && offerScore(G, p, t.tid, ask.amt, ask.yrs) >= 0.95) {
-          p.contract = { amt: ask.amt, exp: y + ask.yrs };
-        } else { p.lastTid = t.tid; p.tid = -1; p.contract = null; left.push(p); }
-      }
-    }
+    for (const t of G.teams) if (t.tid !== G.userTid) left.push(...resignTeam(G, t).left);
     return left;
   }
 
@@ -370,7 +374,7 @@
 
   HM.AI = {
     value, pickValue, projectedPick, tradeCheck, tradeDelta, aiAccepts, execTrade, balance, aiTrade, aiOfferToUser,
-    asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, capRoom, capYear, payroll,
+    asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
     draftScore, aiDraftPick, aiTactics, setStrategies, fillRoster, trimRoster, release,
   };
 })();

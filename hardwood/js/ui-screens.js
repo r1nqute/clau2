@@ -525,17 +525,52 @@
   // ---------- 저장·설정 ----------
   S.settings = () => {
     const G = G_();
-    const theme = (() => { try { return localStorage.getItem('hw-theme') || 'system'; } catch (e) { return 'system'; } })();
+    const theme = App.themePref();
     return `<h1>저장·설정</h1>
     <div class="grid g2">
       <div class="card"><h2>저장</h2><p class="small muted">게임은 이 브라우저에 저장됩니다(자동 저장 ${G.settings.autosave !== false ? '켜짐' : '꺼짐'}). 다른 기기로 옮기려면 파일로 내보내세요.</p>
         <div class="row"><button class="btn pri" data-act="saveNow">지금 저장</button><button class="btn" data-act="exportSave">파일로 내보내기</button><button class="btn" data-act="toTitle">타이틀로</button></div>
         <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행할 때마다 자동 저장</label></div>
-      <div class="card"><h2>화면</h2><div class="row"><select data-change="theme"><option value="system" ${theme === 'system' ? 'selected' : ''}>시스템 설정 따르기</option><option value="dark" ${theme === 'dark' ? 'selected' : ''}>어둡게</option><option value="light" ${theme === 'light' ? 'selected' : ''}>밝게</option></select></div></div>
+      <div class="card"><h2>화면 테마</h2><div class="grid g3">${[['dark', '🌙 다크 모드'], ['light', '☀️ 밝게'], ['system', '📱 기기 설정 따르기']].map(([v, l]) => `<label class="opt"><input type="radio" name="theme" value="${v}" ${theme === v ? 'checked' : ''} data-change="theme"><span><b>${l}</b></span></label>`).join('')}</div>
+        <p class="small muted" style="margin-top:8px">위쪽 막대의 🌙/☀️ 단추로도 바로 바꿀 수 있습니다.</p></div>
+      ${App.autoCard()}
       <div class="card"><h2>이 게임</h2><div class="kv small"><span>시작 시즌</span><span>${U.seasonLabel(G.startYear)}</span><span>현재 시즌</span><span>${U.seasonLabel(G.season)}</span><span>선수 성장</span><span>${G.settings.prog === 'real' ? '실제 커리어 따라가기' : '무작위 성장'}</span><span>리그</span><span>${G.teams.length}개 팀</span></div>
         <div class="row" style="margin-top:10px"><select data-change="progMode"><option value="real" ${G.settings.prog === 'real' ? 'selected' : ''}>실제 커리어 따라가기</option><option value="random" ${G.settings.prog === 'random' ? 'selected' : ''}>무작위 성장</option></select></div></div>
       <div class="card"><h2>자료</h2><p class="small muted">선수 능력치는 Basketball-Reference 기록(1976-77 ~ 2026-27 시즌 초)을 바탕으로 계산했습니다. 팀·선수 이름은 실제 NBA를 따르지만, 이 게임은 NBA와 관계없는 팬 제작 시뮬레이션입니다. 계약 금액은 실제 계약이 아니라 능력과 당시 샐러리캡으로 추정한 값입니다.</p></div>
     </div>`;
+  };
+  // 자동 진행(턴 끄기)
+  App.autoCard = () => {
+    const A = Season.autoSet(G_());
+    const tog = (k, title, desc) => `<label class="opt"><input type="checkbox" ${A[k] ? 'checked' : ''} data-change="autoTog" data-k="${k}"><span><b>${title}</b><span class="small muted">${desc}</span></span></label>`;
+    const sel = (k, title, opts) => `<div><h3>${title}</h3><div class="grid">${opts.map(([v, l, d]) => `<label class="opt"><input type="radio" name="auto-${k}" value="${v}" ${A[k] === v ? 'checked' : ''} data-change="autoSel" data-k="${k}"><span><b>${l}</b><span class="small muted">${d}</span></span></label>`).join('')}</div></div>`;
+    return `<div class="card span2" id="autoCard"><h2>자동 진행(턴 끄기) <span class="r"><button class="btn sm" data-act="autoPreset" data-p="fast">빠르게: 지루한 부분 모두 자동</button> <button class="btn sm" data-act="autoPreset" data-p="full">모두 직접</button></span></h2>
+      <p class="small muted">끈 단계는 코치진이 알아서 처리하고 멈추지 않고 넘어갑니다. 위쪽 <b>계속 ▾</b> 메뉴의 건너뛰기(1주일·트레이드 마감까지·시즌 끝까지·오프시즌 건너뛰기·다음 시즌 개막까지)와 함께 쓰세요.</p>
+      <div class="grid g2" style="margin-top:10px">
+        ${sel('games', '우리 경기 날 멈추기', [['all', '모든 경기', '경기마다 멈춥니다'], ['playoffs', '플레이오프만', '정규시즌 경기는 자동으로 치릅니다'], ['none', '멈추지 않음', '모든 경기를 자동으로 치르고, 계속을 누르면 1주일씩 진행합니다']])}
+        ${sel('gameMode', '멈췄을 때 경기 방식', [['ask', '매번 묻기', '경기 전 화면에서 고릅니다'], ['live', '바로 생중계', '경기 전 화면 없이 생중계로'], ['quick', '바로 결과', '경기 전 화면 없이 결과만']])}
+      </div>
+      <h3 style="margin-top:14px">코치에게 맡길 단계(턴 끄기)</h3>
+      <div class="grid g2">
+        ${tog('preseason', '프리시즌 건너뛰기', '새 시즌이 오면 바로 개막까지 진행합니다. 로스터가 넘치면 코치가 정리합니다.')}
+        ${tog('draft', '드래프트 자동', '우리 지명도 코치가 합니다(대체로 실제 평가 순서를 따릅니다).')}
+        ${tog('resign', '재계약 자동', '계약이 끝나는 선수를 코치가 판단해 재계약하거나 보냅니다.')}
+        ${tog('fa', '자유계약 시장 자동', 'FA 기간을 멈추지 않고 넘기며, 코치가 필요한 선수와 계약합니다.')}
+      </div>
+      <h3 style="margin-top:14px">알림·정지</h3>
+      <div class="grid g3">
+        ${tog('halftime', '생중계 하프타임 정지', '하프타임에 잠깐 멈춥니다.')}
+        ${tog('offers', 'AI 트레이드 제안 받기', '끄면 다른 구단이 제안을 보내지 않습니다.')}
+        ${tog('minorInjury', '가벼운 부상 알림', '끄면 7일 이상 결장하는 부상만 알립니다.')}
+      </div></div>`;
+  };
+  A.autoTog = el => { Season.autoSet(G_())[el.dataset.k] = el.checked; App.toast('설정을 바꿨습니다'); App.autosave(); };
+  A.autoSel = el => { Season.autoSet(G_())[el.dataset.k] = el.value; App.toast('설정을 바꿨습니다'); App.autosave(); App.rerender(); };
+  A.autoPreset = el => {
+    const A2 = Season.autoSet(G_());
+    if (el.dataset.p === 'fast') Object.assign(A2, { games: 'playoffs', gameMode: 'ask', preseason: true, draft: true, resign: true, fa: true, halftime: false, minorInjury: false });
+    else Object.assign(A2, { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true });
+    App.toast(el.dataset.p === 'fast' ? '지루한 부분을 모두 자동으로 바꿨습니다' : '모든 단계를 직접 하도록 바꿨습니다'); App.autosave(); App.rerender();
   };
   A.saveNow = () => App.save();
   A.exportSave = () => HM.Store.exportFile(G_());
@@ -543,10 +578,6 @@
   A.autosave = el => { G_().settings.autosave = el.checked; };
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };
-  App.setTheme = v => {
-    try { localStorage.setItem('hw-theme', v); } catch (e) { /* 무시 */ }
-    if (v === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v);
-  };
 
   // ---------- 해임 ----------
   S.fired = () => {

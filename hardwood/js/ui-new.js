@@ -53,7 +53,7 @@
     const colors = d.colors;
     const tsel = teams.find(t => t.abbr === sel.abbr);
     return `<div class="title"><div class="wrap">
-      <div class="hero"><div class="ball"></div><div><h1>하드우드 매니저</h1><p>실제 NBA 역사 위에서 펼치는 농구 감독 시뮬레이션 · ${U.seasonLabel(d.first)} ~ ${U.seasonLabel(d.last)}</p></div></div>
+      <div class="hero"><div class="ball"></div><div style="flex:1;min-width:0"><h1>하드우드 매니저</h1><p>실제 NBA 역사 위에서 펼치는 농구 감독 시뮬레이션 · ${U.seasonLabel(d.first)} ~ ${U.seasonLabel(d.last)}</p></div>${App.themeBtn()}</div>
       <div id="saves"></div>
       <div class="card" style="margin-top:14px">
         <h2>새 게임</h2>

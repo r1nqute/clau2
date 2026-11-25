@@ -4,6 +4,13 @@
   const U = HM.U, L = HM.L, P = HM.P, F = HM.Fin, AI = HM.AI, Sim = HM.Sim, Prog = HM.Prog;
   const D = () => globalThis.HM_DATA;
 
+  // ---------- 자동 진행(턴 끄기) 설정 ----------
+  const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true };
+  function autoSet(G) {
+    G.settings.auto = Object.assign({}, AUTO_DEFAULT, G.settings.auto || {});
+    return G.settings.auto;
+  }
+
   // ---------- 메시지 ----------
   function msg(G, title, body, o = {}) {
     G.inbox.unshift(Object.assign({ id: G.nextMsg++, date: G.date, title, body, read: false, type: 'info' }, o));
@@ -199,7 +206,7 @@
     for (const b of INJ) { acc += b[0]; if (r < acc) { band = b; break; } }
     const days = U.randInt(band[1], band[2]);
     p.injury = { type: U.pick(band[3]), days };
-    if (p.tid === G.userTid) msg(G, `부상: ${p.name}`, `${p.name} 선수가 <b>${p.injury.type}</b>로 약 <b>${days}일</b> 결장할 전망입니다.`, { type: 'injury', pid: p.pid });
+    if (p.tid === G.userTid && (days >= 7 || autoSet(G).minorInjury)) msg(G, `부상: ${p.name}`, `${p.name} 선수가 <b>${p.injury.type}</b>로 약 <b>${days}일</b> 결장할 전망입니다.`, { type: 'injury', pid: p.pid });
     if (p.ovr >= 84 && days >= 14) news(G, `${p.name}(${nm(G, p.tid)}) ${p.injury.type}, 약 ${days}일 결장`, { type: 'injury' });
     if (days >= 120) { p.a.ath = Math.max(1, p.a.ath - U.randInt(2, 6)); p.a.spd = Math.max(1, p.a.spd - U.randInt(1, 4)); P.update(p); }
   }
@@ -614,6 +621,21 @@
     msg(G, '재계약 기간', exp.length ? `계약이 끝나는 선수가 ${exp.length}명 있습니다: ${exp.map(p => p.name).join(', ')}.<br><b>재정·계약</b> 화면에서 재계약 여부를 정하세요. 다음 단계로 넘어가면 재계약하지 않은 선수는 자유계약 시장에 나갑니다.` : '올해 계약이 끝나는 선수가 없습니다.', { type: 'contract' });
   }
 
+  // 코치에게 맡긴 드래프트: 남은 지명을 모두 끝낸다
+  function autoDraftAll(G) {
+    while (draftUntilUser(G) === 'user') {
+      const pool = L.prospects(G);
+      if (!pool.length) { G.draft.idx++; continue; }
+      draftPlayer(G, AI.aiDraftPick(G, G.userTid, pool).pid);
+    }
+    finishDraft(G);
+  }
+  // 코치에게 맡긴 재계약
+  function autoResignUser(G) {
+    const { kept, left } = AI.resignTeam(G, G.teams[G.userTid]);
+    if (kept.length || left.length) msg(G, '코치진 재계약 결과', (kept.length ? `재계약: ${kept.map(p => `<b>${p.name}</b>(${U.money(p.contract.amt)}×${p.contract.exp - G.season}년)`).join(', ')}<br>` : '') + (left.length ? `떠난 선수: ${left.map(p => p.name).join(', ')}` : ''), { type: 'contract' });
+  }
+
   // ---------- 시즌 마무리 ----------
   function endSeason(G) {
     const y = G.season;
@@ -698,7 +720,7 @@
   }
 
   // 오늘 경기를 모두 치르고 하루를 넘긴다. userResult: 사용자가 생중계로 치른 결과
-  function day(G, userResult) {
+  function day(G, userResult, opts = {}) {
     if (G.fired) return 'fired';
     const ph = G.phase;
     if (ph === 'preseason') {
@@ -706,7 +728,10 @@
       if (nd >= G.cal.open) {
         // 개막: 사용자 로스터 확인
         const n = L.roster(G, G.userTid).length;
-        if (n > 15) return 'roster';
+        if (n > 15 && opts.autoRoster) {
+          const cut = AI.trimRoster(G, G.userTid, 15);
+          msg(G, '로스터 정리', `개막 로스터를 15명으로 맞추느라 코치진이 ${cut.map(p => p.name).join(', ')}을(를) 방출했습니다.`, { type: 'contract' });
+        } else if (n > 15) return 'roster';
         if (n < 12) { const add = AI.fillRoster(G, G.userTid, 12); msg(G, '로스터 보충', `로스터가 12명보다 적어 최저 연봉으로 ${add.map(p => p.name).join(', ')}와 계약했습니다.`, { type: 'contract' }); }
         G.phase = 'regular'; G.date = G.cal.open;
         L.computeLgAdj(G);
@@ -743,7 +768,8 @@
       return before !== G.phase ? 'phase' : 'day';
     }
     if (ph === 'fa') {
-      const signed = AI.faDay(G, G.date <= U.addDays(G.cal.fa, 10) ? 1 : 0.4);
+      const signed = AI.faDay(G, G.date <= U.addDays(G.cal.fa, 10) ? 1 : 0.4, !!opts.autoUser);
+      for (const s2 of signed) if (s2.t.tid === G.userTid) msg(G, `코치진 영입: ${s2.p.name}`, `자유계약 시장에서 <b>${s2.p.name}</b>(${s2.p.pos}, 능력 ${Math.round(s2.p.ovr)})와 ${U.money(s2.amt)}×${s2.p.contract.exp - G.season}년 계약했습니다.`, { type: 'contract', pid: s2.p.pid });
       for (const s of signed) if (s.p.ovr >= 80) news(G, `FA: ${s.p.name} → ${s.t.ko} (${U.money(s.amt)}×${s.p.contract.exp - G.season}년)`, { type: 'fa' });
       G.date = U.addDays(G.date, 1);
       if (G.date > G.cal.faEnd) { newSeason(G); return 'phase'; }
@@ -778,7 +804,7 @@
         const o = AI.aiTrade(G);
         if (o) news(G, tradeText(G, o), { type: 'trade' });
       }
-      if (beforeDeadline && Math.random() < 0.025 && !G.inbox.some(m => m.type === 'offer' && !m.done)) {
+      if (beforeDeadline && autoSet(G).offers && Math.random() < 0.025 && !G.inbox.some(m => m.type === 'offer' && !m.done)) {
         const o = AI.aiOfferToUser(G);
         if (o) msg(G, `트레이드 제안: ${nm(G, o.a)}`, tradeText(G, o, true), { type: 'offer', offer: o });
       }
@@ -839,6 +865,6 @@
 
   HM.Season = {
     calendar, genSchedule, setupSeason, standings, gamesBehind, userGameToday, day, makeGame, record, playGameQuick, afterPostseasonGame,
-    startDraft, draftPlayer, draftUntilUser, finishDraft, endResign, newSeason, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
+    startDraft, draftPlayer, draftUntilUser, finishDraft, endResign, newSeason, autoSet, autoDraftAll, autoResignUser, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
   };
 })();

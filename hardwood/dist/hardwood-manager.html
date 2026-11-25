@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>하드우드 매니저</title>
 <meta name="description" content="실제 NBA 역사 기반 농구 감독 시뮬레이션">
+<meta name="theme-color" content="#1a2129">
+<script>try{var t=localStorage.getItem('hw-theme')||'dark';if(t!=='system')document.documentElement.setAttribute('data-theme',t)}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
 <style>
 :root {
   --bg: #eef1f4; --panel: #ffffff; --panel2: #f5f7f9; --panel3: #e8ecf0; --line: #d8dee5; --text: #1b2430; --muted: #5d6b7a; --faint: #8b97a3;
@@ -67,6 +69,9 @@ button { font: inherit; color: inherit; }
 .nav a .ic { width: 20px; text-align: center; font-size: 15px; }
 .nav a .badge { margin-left: auto; background: var(--bad); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; line-height: 18px; }
 .nav .sep { height: 1px; background: var(--line); margin: 8px 6px; }
+
+.iconbtn { border: 1px solid var(--line); background: var(--panel2); border-radius: 10px; width: 38px; height: 38px; font-size: 17px; cursor: pointer; flex: none; display: grid; place-items: center; padding: 0; }
+.iconbtn:hover { background: var(--panel3); }
 
 /* 계속 단추 */
 .cont { display: flex; align-items: stretch; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
@@ -256,6 +261,7 @@ select { max-width: 100%; }
   #side.open { transform: none; }
   #main { padding: 12px 12px 96px; }
   .topdate { display: none; }
+  #top .iconbtn { margin-left: auto; width: 34px; height: 34px; }
   #top .cont { display: none; }
   #bottombar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); gap: 10px; align-items: center; }
   #bottombar .d { line-height: 1.2; min-width: 0; flex: 1; }
@@ -1876,7 +1882,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   }
 
   // AI 팀들이 자유계약 선수와 계약(하루치). 좋은 선수부터 자기에게 맞는 팀을 고른다.
-  function faDay(G, intensity = 1) {
+  function faDay(G, intensity = 1, includeUser = false) {
     const cy = capYear(G);
     const signed = [];
     const perTeam = {};
@@ -1889,7 +1895,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       const ask = asking(G, p);
       const cands = [];
       for (const t of G.teams) {
-        if (t.tid === G.userTid || (perTeam[t.tid] || 0) >= 2) continue;
+        if ((t.tid === G.userTid && !includeUser) || (perTeam[t.tid] || 0) >= 2) continue;
         const dep = depthOf[t.tid];
         const n = dep.length;
         const worst = dep[n - 1];
@@ -1914,7 +1920,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     }
     // 아무도 데려가지 않는 선수: 최저 연봉으로라도(로스터 13명 미만 팀)
     for (const t of G.teams) {
-      if (t.tid === G.userTid) continue;
+      if (t.tid === G.userTid && !includeUser) continue;
       if (L.roster(G, t.tid).length < 13 && Math.random() < 0.5 * intensity) {
         const p = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
         if (p) { sign(G, p, t.tid, Math.max(F.minSal(cy), Math.min(asking(G, p).amt, F.minSal(cy) * 2)), 1); signed.push({ p, t, amt: p.contract.amt }); }
@@ -1924,26 +1930,30 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     return signed;
   }
 
-  // 재계약(AI). 반환: 떠난 선수 목록
+  // 재계약: 한 팀의 만료 선수를 정한다. 반환: { kept, left }
+  function resignTeam(G, t) {
+    const y = G.season;
+    const kept = [], left = [];
+    const exp = L.roster(G, t.tid).filter(p => p.contract && p.contract.exp <= y);
+    for (const p of exp.sort((a, b) => b.ovr - a.ovr)) {
+      const ask = asking(G, p);
+      const age = P.age(p, y + 1);
+      const v = value(G, p, t.tid, { noContract: true });
+      const worth = F.cap(y + 1) * F.shareFor(p.ovr + (age <= 24 ? (p.pa - p.ovr) * 0.4 : 0));
+      const tax = F.taxLine(y + 1);
+      const pay = F.payroll(G, t.tid, y + 1);
+      const want = ask.amt <= worth * 1.15 && (pay + ask.amt <= tax * 1.08 || p.ovr >= 86) && v > 0.2;
+      if (want && Math.random() < 0.85 && offerScore(G, p, t.tid, ask.amt, ask.yrs) >= 0.95) {
+        p.contract = { amt: ask.amt, exp: y + ask.yrs };
+        kept.push(p);
+      } else { p.lastTid = t.tid; p.tid = -1; p.contract = null; left.push(p); }
+    }
+    return { kept, left };
+  }
+  // AI 팀 전체 재계약. 반환: 떠난 선수 목록
   function aiResign(G) {
     const left = [];
-    const y = G.season;
-    for (const t of G.teams) {
-      if (t.tid === G.userTid) continue;
-      const exp = L.roster(G, t.tid).filter(p => p.contract && p.contract.exp <= y);
-      for (const p of exp.sort((a, b) => b.ovr - a.ovr)) {
-        const ask = asking(G, p);
-        const age = P.age(p, y + 1);
-        const v = value(G, p, t.tid, { noContract: true });
-        const worth = F.cap(y + 1) * F.shareFor(p.ovr + (age <= 24 ? (p.pa - p.ovr) * 0.4 : 0));
-        const tax = F.taxLine(y + 1);
-        const pay = F.payroll(G, t.tid, y + 1);
-        const want = ask.amt <= worth * 1.15 && (pay + ask.amt <= tax * 1.08 || p.ovr >= 86) && v > 0.2;
-        if (want && Math.random() < 0.85 && offerScore(G, p, t.tid, ask.amt, ask.yrs) >= 0.95) {
-          p.contract = { amt: ask.amt, exp: y + ask.yrs };
-        } else { p.lastTid = t.tid; p.tid = -1; p.contract = null; left.push(p); }
-      }
-    }
+    for (const t of G.teams) if (t.tid !== G.userTid) left.push(...resignTeam(G, t).left);
     return left;
   }
 
@@ -2011,7 +2021,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
   HM.AI = {
     value, pickValue, projectedPick, tradeCheck, tradeDelta, aiAccepts, execTrade, balance, aiTrade, aiOfferToUser,
-    asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, capRoom, capYear, payroll,
+    asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
     draftScore, aiDraftPick, aiTactics, setStrategies, fillRoster, trimRoster, release,
   };
 })();
@@ -2023,6 +2033,13 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   const HM = globalThis.HM = globalThis.HM || {};
   const U = HM.U, L = HM.L, P = HM.P, F = HM.Fin, AI = HM.AI, Sim = HM.Sim, Prog = HM.Prog;
   const D = () => globalThis.HM_DATA;
+
+  // ---------- 자동 진행(턴 끄기) 설정 ----------
+  const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true };
+  function autoSet(G) {
+    G.settings.auto = Object.assign({}, AUTO_DEFAULT, G.settings.auto || {});
+    return G.settings.auto;
+  }
 
   // ---------- 메시지 ----------
   function msg(G, title, body, o = {}) {
@@ -2219,7 +2236,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     for (const b of INJ) { acc += b[0]; if (r < acc) { band = b; break; } }
     const days = U.randInt(band[1], band[2]);
     p.injury = { type: U.pick(band[3]), days };
-    if (p.tid === G.userTid) msg(G, `부상: ${p.name}`, `${p.name} 선수가 <b>${p.injury.type}</b>로 약 <b>${days}일</b> 결장할 전망입니다.`, { type: 'injury', pid: p.pid });
+    if (p.tid === G.userTid && (days >= 7 || autoSet(G).minorInjury)) msg(G, `부상: ${p.name}`, `${p.name} 선수가 <b>${p.injury.type}</b>로 약 <b>${days}일</b> 결장할 전망입니다.`, { type: 'injury', pid: p.pid });
     if (p.ovr >= 84 && days >= 14) news(G, `${p.name}(${nm(G, p.tid)}) ${p.injury.type}, 약 ${days}일 결장`, { type: 'injury' });
     if (days >= 120) { p.a.ath = Math.max(1, p.a.ath - U.randInt(2, 6)); p.a.spd = Math.max(1, p.a.spd - U.randInt(1, 4)); P.update(p); }
   }
@@ -2634,6 +2651,21 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     msg(G, '재계약 기간', exp.length ? `계약이 끝나는 선수가 ${exp.length}명 있습니다: ${exp.map(p => p.name).join(', ')}.<br><b>재정·계약</b> 화면에서 재계약 여부를 정하세요. 다음 단계로 넘어가면 재계약하지 않은 선수는 자유계약 시장에 나갑니다.` : '올해 계약이 끝나는 선수가 없습니다.', { type: 'contract' });
   }
 
+  // 코치에게 맡긴 드래프트: 남은 지명을 모두 끝낸다
+  function autoDraftAll(G) {
+    while (draftUntilUser(G) === 'user') {
+      const pool = L.prospects(G);
+      if (!pool.length) { G.draft.idx++; continue; }
+      draftPlayer(G, AI.aiDraftPick(G, G.userTid, pool).pid);
+    }
+    finishDraft(G);
+  }
+  // 코치에게 맡긴 재계약
+  function autoResignUser(G) {
+    const { kept, left } = AI.resignTeam(G, G.teams[G.userTid]);
+    if (kept.length || left.length) msg(G, '코치진 재계약 결과', (kept.length ? `재계약: ${kept.map(p => `<b>${p.name}</b>(${U.money(p.contract.amt)}×${p.contract.exp - G.season}년)`).join(', ')}<br>` : '') + (left.length ? `떠난 선수: ${left.map(p => p.name).join(', ')}` : ''), { type: 'contract' });
+  }
+
   // ---------- 시즌 마무리 ----------
   function endSeason(G) {
     const y = G.season;
@@ -2718,7 +2750,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   }
 
   // 오늘 경기를 모두 치르고 하루를 넘긴다. userResult: 사용자가 생중계로 치른 결과
-  function day(G, userResult) {
+  function day(G, userResult, opts = {}) {
     if (G.fired) return 'fired';
     const ph = G.phase;
     if (ph === 'preseason') {
@@ -2726,7 +2758,10 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       if (nd >= G.cal.open) {
         // 개막: 사용자 로스터 확인
         const n = L.roster(G, G.userTid).length;
-        if (n > 15) return 'roster';
+        if (n > 15 && opts.autoRoster) {
+          const cut = AI.trimRoster(G, G.userTid, 15);
+          msg(G, '로스터 정리', `개막 로스터를 15명으로 맞추느라 코치진이 ${cut.map(p => p.name).join(', ')}을(를) 방출했습니다.`, { type: 'contract' });
+        } else if (n > 15) return 'roster';
         if (n < 12) { const add = AI.fillRoster(G, G.userTid, 12); msg(G, '로스터 보충', `로스터가 12명보다 적어 최저 연봉으로 ${add.map(p => p.name).join(', ')}와 계약했습니다.`, { type: 'contract' }); }
         G.phase = 'regular'; G.date = G.cal.open;
         L.computeLgAdj(G);
@@ -2763,7 +2798,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       return before !== G.phase ? 'phase' : 'day';
     }
     if (ph === 'fa') {
-      const signed = AI.faDay(G, G.date <= U.addDays(G.cal.fa, 10) ? 1 : 0.4);
+      const signed = AI.faDay(G, G.date <= U.addDays(G.cal.fa, 10) ? 1 : 0.4, !!opts.autoUser);
+      for (const s2 of signed) if (s2.t.tid === G.userTid) msg(G, `코치진 영입: ${s2.p.name}`, `자유계약 시장에서 <b>${s2.p.name}</b>(${s2.p.pos}, 능력 ${Math.round(s2.p.ovr)})와 ${U.money(s2.amt)}×${s2.p.contract.exp - G.season}년 계약했습니다.`, { type: 'contract', pid: s2.p.pid });
       for (const s of signed) if (s.p.ovr >= 80) news(G, `FA: ${s.p.name} → ${s.t.ko} (${U.money(s.amt)}×${s.p.contract.exp - G.season}년)`, { type: 'fa' });
       G.date = U.addDays(G.date, 1);
       if (G.date > G.cal.faEnd) { newSeason(G); return 'phase'; }
@@ -2798,7 +2834,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         const o = AI.aiTrade(G);
         if (o) news(G, tradeText(G, o), { type: 'trade' });
       }
-      if (beforeDeadline && Math.random() < 0.025 && !G.inbox.some(m => m.type === 'offer' && !m.done)) {
+      if (beforeDeadline && autoSet(G).offers && Math.random() < 0.025 && !G.inbox.some(m => m.type === 'offer' && !m.done)) {
         const o = AI.aiOfferToUser(G);
         if (o) msg(G, `트레이드 제안: ${nm(G, o.a)}`, tradeText(G, o, true), { type: 'offer', offer: o });
       }
@@ -2859,7 +2895,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
   HM.Season = {
     calendar, genSchedule, setupSeason, standings, gamesBehind, userGameToday, day, makeGame, record, playGameQuick, afterPostseasonGame,
-    startDraft, draftPlayer, draftUntilUser, finishDraft, endResign, newSeason, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
+    startDraft, draftPlayer, draftUntilUser, finishDraft, endResign, newSeason, autoSet, autoDraftAll, autoResignUser, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
   };
 })();
 
@@ -3018,6 +3054,23 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   App.pg = (l, k, d = 1) => l && l.gp ? (l[k] / l.gp).toFixed(d) : '-';
   App.pct = (a, b) => b ? (a / b * 100).toFixed(1) : '-';
 
+  // ---------- 테마(다크 모드) ----------
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  App.themePref = () => { try { return localStorage.getItem('hw-theme') || 'dark'; } catch (e) { return 'dark'; } };
+  App.isDark = () => { const t = App.themePref(); return t === 'dark' || (t === 'system' && !!(mq && mq.matches)); };
+  App.applyTheme = () => {
+    const t = App.themePref();
+    if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+    let m = document.querySelector('meta[name="theme-color"]');
+    if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+    m.content = App.isDark() ? '#1a2129' : '#ffffff';
+    document.querySelectorAll('[data-act="themeToggle"]').forEach(b => { b.textContent = App.isDark() ? '☀️' : '🌙'; b.title = App.isDark() ? '밝은 화면으로' : '다크 모드로'; });
+  };
+  App.setTheme = v => { try { localStorage.setItem('hw-theme', v); } catch (e) { /* 무시 */ } App.applyTheme(); };
+  App.acts.themeToggle = () => { App.setTheme(App.isDark() ? 'light' : 'dark'); App.toast(App.isDark() ? '다크 모드' : '밝은 화면'); if (App.route.name === 'settings') App.rerender(); };
+  App.themeBtn = () => `<button class="iconbtn" data-act="themeToggle" title="${App.isDark() ? '밝은 화면으로' : '다크 모드로'}" aria-label="테마 바꾸기">${App.isDark() ? '☀️' : '🌙'}</button>`;
+  if (mq && mq.addEventListener) mq.addEventListener('change', () => App.applyTheme());
+
   // ---------- 정렬되는 표 ----------
   // cols: [{k, label, cls, f(row)->html, v(row)->정렬값, title}]
   App.table = (id, cols, rows, opt = {}) => {
@@ -3091,6 +3144,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         <a class="topteam" href="#/home"><span class="tbadge" style="${App.tstyle(t)}">${esc(t.abbr)}</span>
           <span class="meta"><b>${esc(t.ko)}</b><span>${r.w}승 ${r.l}패 · ${App.phaseTxt(G.phase)}</span></span></a>
         <div class="topdate"><b>${U.fmtDate(G.date)}</b><span>${U.seasonLabel(G.season)} 시즌</span></div>
+        ${App.themeBtn()}
         <div class="cont"><button data-act="cont" data-mode="next">${contLabel} ▸</button><button class="more" data-act="contMenu" aria-label="진행 방식">▾</button></div>
       </header>
       <nav id="side" class="nav">${nav}</nav>
@@ -3106,7 +3160,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     if (G.phase === 'resign') return 'FA 시장 열기';
     if (G.phase === 'preseason') return '개막까지';
     if (G.phase === 'fa') return '다음 날';
-    if (Season.userGameToday(G)) return '경기 시작';
+    const ug = Season.userGameToday(G);
+    if (ug && stopForGame(G, Season.autoSet(G), 'next', ug)) return '경기 시작';
     return '계속';
   };
 
@@ -3187,34 +3242,59 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   App.acts.contMenu = () => {
     const G = App.G;
     const inSeason = ['regular', 'playin', 'playoffs'].includes(G.phase);
+    const off = ['draft', 'resign', 'fa'].includes(G.phase);
     const opts = [];
     if (inSeason) {
-      opts.push(['next', '다음 경기까지', '우리 경기 날 멈추고 경기를 지휘합니다']);
+      opts.push(['next', '다음 경기까지', '우리 경기 날 멈춥니다(설정에 따라)']);
       opts.push(['day', '하루', '하루만 진행합니다']);
-      opts.push(['week', '1주일(자동 경기)', '우리 경기도 자동으로 치릅니다']);
-      opts.push(['month', '1개월(자동 경기)', '']);
+      opts.push(['week', '1주일 건너뛰기', '우리 경기도 자동으로 치릅니다']);
+      opts.push(['month', '1개월 건너뛰기', '']);
+      if (G.phase === 'regular' && G.date <= G.cal.deadline) opts.push(['deadline', '트레이드 마감까지', `${U.fmtDateShort(G.cal.deadline)}까지 자동`]);
       if (G.phase === 'regular') opts.push(['season', '정규시즌 끝까지', '플레이오프 직전까지 모두 자동']);
-      opts.push(['post', '시즌 끝까지', '플레이오프까지 모두 자동(드래프트 전까지)']);
-    } else if (G.phase === 'fa') {
-      opts.push(['day', '하루', '']); opts.push(['week', '1주일', '']); opts.push(['month', '1개월', '']); opts.push(['season', '프리시즌까지', 'FA 시장을 끝냅니다']);
+      opts.push(['post', '시즌 끝까지', '플레이오프까지 모두 자동(드래프트 직전에서 멈춤)']);
+      opts.push(['nextseason', '다음 시즌 개막까지', '플레이오프·드래프트·재계약·FA를 모두 코치에게 맡기고 건너뜁니다']);
+    } else if (off) {
+      if (G.phase === 'fa') { opts.push(['day', '하루', '']); opts.push(['week', '1주일', '']); }
+      opts.push(['offseason', '오프시즌 건너뛰기', '남은 드래프트·재계약·FA를 코치에게 맡기고 프리시즌으로']);
+      opts.push(['nextseason', '다음 시즌 개막까지', '오프시즌을 모두 건너뛰고 개막일로']);
     } else if (G.phase === 'preseason') {
       opts.push(['next', '개막까지', '']); opts.push(['day', '하루', '']);
-    } else opts.push(['next', App.contLabel(), '']);
-    App.modal('진행 방식', `<div class="grid">${opts.map(o => `<button class="btn" style="justify-content:flex-start;padding:12px" data-act="cont" data-mode="${o[0]}"><b>${o[1]}</b><span class="muted small">${o[2]}</span></button>`).join('')}</div>`);
+    }
+    if (!opts.length) opts.push(['next', App.contLabel(), '']);
+    App.modal('진행 방식', `<div class="grid">${opts.map(o => `<button class="btn" style="justify-content:flex-start;padding:12px;flex-wrap:wrap;gap:8px" data-act="cont" data-mode="${o[0]}"><b>${o[1]}</b><span class="muted small">${o[2]}</span></button>`).join('')}</div>
+      <div class="row" style="margin-top:12px"><a class="lnk small" href="#/settings" data-act="closeModalGo">⚙️ 자동 진행(턴 끄기) 설정</a></div>`);
   };
+  App.acts.closeModalGo = el => { App.closeModal(); location.hash = el.getAttribute('href'); };
 
   App.acts.cont = el => App.cont(el.dataset.mode || 'next');
+
+  // 우리 경기 날 멈출지
+  function stopForGame(G, A, mode, ug) {
+    if (mode !== 'next' && mode !== 'day') return false;
+    if (A.games === 'none') return false;
+    if (A.games === 'playoffs' && ug.type === 'reg') return false;
+    return true;
+  }
+  App.startUserGame = ug => {
+    const A = Season.autoSet(App.G);
+    if (A.gameMode === 'live') return App.acts.liveGame();
+    if (A.gameMode === 'quick') return App.acts.quickGame();
+    return App.preMatch(ug);
+  };
 
   App.cont = async (mode = 'next') => {
     const G = App.G;
     App.closeModal();
     if (App.running) return;
     if (G.fired) return App.go('#/fired');
-    if (G.phase === 'draft') {
+    const A = Season.autoSet(G);
+    const skipOff = mode === 'offseason' || mode === 'nextseason';
+    // 직접 처리하는 드래프트·재계약
+    if (G.phase === 'draft' && !A.draft && !skipOff) {
       if (location.hash !== '#/draft') { App.go('#/draft'); return; }
       return App.acts.draftAuto();
     }
-    if (G.phase === 'resign') {
+    if (G.phase === 'resign' && !A.resign && !skipOff) {
       const exp = L.roster(G, G.userTid).filter(p => p.contract && p.contract.exp <= G.season);
       if (exp.length) {
         const ok = await App.confirm('자유계약 시장으로', `재계약하지 않은 선수 ${exp.length}명(${exp.map(p => esc(p.name)).join(', ')})은 자유계약 선수가 됩니다. 계속할까요?`, '계속');
@@ -3222,41 +3302,58 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       }
       Season.endResign(G);
       App.autosave();
-      return App.go('#/fa');
+      if (!A.fa) return App.go('#/fa');
     }
     App.running = true;
-    const startDate = G.date, startPhase = G.phase, startSeason = G.season;
-    const limit = { day: 1, week: 7, month: 30 }[mode] || 9999;
+    const startPhase = G.phase, startSeason = G.season;
+    const noGameStops = A.games === 'none' || (A.games === 'playoffs' && G.phase === 'regular');
+    const limit = { day: 1, week: 7, month: 30 }[mode] || (mode === 'next' && noGameStops && G.phase === 'regular' ? 7 : 9999);
+    const autoUser = A.fa || skipOff;
+    const autoRoster = A.preseason || skipOff || A.games === 'none';
     let days = 0, lastYield = Date.now();
+    let w = 0, l = 0;
     const offersBefore = G.inbox.filter(m => m.type === 'offer' && !m.done).length;
+    const countGame = () => {
+      const g = G.lastUserGame && G.schedule.find(x => x.gid === G.lastUserGame);
+      if (g && g.played && g !== countGame.last) { countGame.last = g; const home = g.h === G.userTid; if ((home ? g.hs : g.as) > (home ? g.as : g.hs)) w++; else l++; }
+    };
+    let stopReason = null;
     try {
       while (true) {
         if (G.fired) break;
+        // 코치에게 맡긴 단계는 그 자리에서 처리
+        if (G.phase === 'draft') {
+          if (A.draft || skipOff) { Season.autoDraftAll(G); continue; }
+          break;
+        }
+        if (G.phase === 'resign') {
+          if (A.resign || skipOff) { Season.autoResignUser(G); Season.endResign(G); continue; }
+          break;
+        }
         const ug = Season.userGameToday(G);
-        if (ug && (mode === 'next' || mode === 'day')) {
-          App.running = false;
-          App.render();
-          return App.preMatch(ug);
-        }
-        const r = Season.day(G);
-        if (r === 'roster') {
-          App.running = false; App.busy(false);
-          App.modal('로스터 초과', `개막을 앞두고 로스터가 ${L.roster(G, G.userTid).length}명입니다. 15명 이하로 줄여야 정규시즌을 시작할 수 있습니다.<br><br>선수단 화면에서 선수를 방출하거나 트레이드하세요.`, '<button class="btn pri" data-act="goSquad">선수단으로</button>');
-          App.rerender();
-          return;
-        }
+        if (ug && stopForGame(G, A, mode, ug)) { stopReason = { game: ug }; break; }
+        const r = Season.day(G, null, { autoUser, autoRoster });
+        countGame();
+        if (r === 'roster') { stopReason = 'roster'; break; }
         if (r === 'wait') break;
         days++;
         if (r === 'phase') {
-          const keepGoing = (mode === 'post' && ['playin', 'playoffs'].includes(G.phase)) || (mode === 'season' && G.phase === 'fa');
-          if (!keepGoing) break;
+          const ph = G.phase;
+          let keep = false;
+          if (mode === 'post') keep = ph === 'playin' || ph === 'playoffs';
+          else if (mode === 'offseason') keep = ph !== 'preseason' || A.preseason;
+          else if (mode === 'nextseason') keep = ph !== 'regular';
+          else if (mode === 'next') keep = (ph === 'fa' && A.fa) || (ph === 'preseason' && A.preseason) || (ph === 'draft' && A.draft) || (ph === 'resign' && A.resign);
+          if (mode === 'offseason' && ph === 'regular') keep = false;
+          if (!keep) break;
         }
-        if (G.season !== startSeason && G.phase === 'preseason') break;
+        if (mode === 'deadline' && G.date > G.cal.deadline) break;
+        if (mode === 'next' && G.phase === 'fa' && !A.fa && days >= 1) break;
         if (days >= limit) break;
-        if (mode === 'next' && G.inbox.filter(m => m.type === 'offer' && !m.done).length > offersBefore) break;
+        if ((mode === 'next' || mode === 'day') && G.inbox.filter(m => m.type === 'offer' && !m.done).length > offersBefore) break;
         if (Date.now() - lastYield > 120) {
-          const frac = mode === 'season' || mode === 'post' ? null : Math.min(1, days / Math.min(limit, 60));
-          App.busy(true, `${U.fmtDate(G.date)} 진행 중…`, frac);
+          const frac = limit < 9999 ? Math.min(1, days / limit) : null;
+          App.busy(true, `${U.fmtDate(G.date)} · ${App.phaseTxt(G.phase)} 진행 중…`, frac);
           await sleep(0);
           lastYield = Date.now();
         }
@@ -3264,13 +3361,21 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     } catch (e) { console.error(e); App.toast('오류: ' + e.message, 5000); }
     App.running = false;
     App.busy(false);
-    void startDate; void startPhase;
     App.autosave();
     if (G.fired) return App.go('#/fired');
+    if (stopReason === 'roster') {
+      App.modal('로스터 초과', `개막을 앞두고 로스터가 ${L.roster(G, G.userTid).length}명입니다. 15명 이하로 줄여야 정규시즌을 시작할 수 있습니다.<br><br>선수단 화면에서 선수를 방출하거나 트레이드하세요. (설정에서 <b>프리시즌 건너뛰기</b>를 켜면 코치진이 알아서 정리합니다.)`, '<button class="btn pri" data-act="goSquad">선수단으로</button>');
+      App.rerender();
+      return;
+    }
+    if (w + l > 1) App.toast(`${days}일 진행 · 우리 팀 ${w}승 ${l}패`, 3000);
+    if (stopReason && stopReason.game) { App.render(); return App.startUserGame(stopReason.game); }
     if (G.phase === 'draft' && startPhase !== 'draft') return App.go('#/draft');
+    if (G.phase === 'resign' && startPhase !== 'resign') return App.go('#/finance');
+    if (G.phase === 'fa' && startPhase !== 'fa') return App.go('#/fa');
     if (G.phase !== startPhase && (G.phase === 'playoffs' || G.phase === 'playin')) return App.go('#/standings');
+    if (G.season !== startSeason && (G.phase === 'preseason' || G.phase === 'regular')) return App.go('#/inbox');
     App.rerender();
-    if (G.phase === 'preseason' && startPhase === 'fa') App.go('#/inbox');
   };
   App.acts.goSquad = () => { App.closeModal(); App.go('#/squad'); };
 
@@ -3807,17 +3912,52 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   // ---------- 저장·설정 ----------
   S.settings = () => {
     const G = G_();
-    const theme = (() => { try { return localStorage.getItem('hw-theme') || 'system'; } catch (e) { return 'system'; } })();
+    const theme = App.themePref();
     return `<h1>저장·설정</h1>
     <div class="grid g2">
       <div class="card"><h2>저장</h2><p class="small muted">게임은 이 브라우저에 저장됩니다(자동 저장 ${G.settings.autosave !== false ? '켜짐' : '꺼짐'}). 다른 기기로 옮기려면 파일로 내보내세요.</p>
         <div class="row"><button class="btn pri" data-act="saveNow">지금 저장</button><button class="btn" data-act="exportSave">파일로 내보내기</button><button class="btn" data-act="toTitle">타이틀로</button></div>
         <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행할 때마다 자동 저장</label></div>
-      <div class="card"><h2>화면</h2><div class="row"><select data-change="theme"><option value="system" ${theme === 'system' ? 'selected' : ''}>시스템 설정 따르기</option><option value="dark" ${theme === 'dark' ? 'selected' : ''}>어둡게</option><option value="light" ${theme === 'light' ? 'selected' : ''}>밝게</option></select></div></div>
+      <div class="card"><h2>화면 테마</h2><div class="grid g3">${[['dark', '🌙 다크 모드'], ['light', '☀️ 밝게'], ['system', '📱 기기 설정 따르기']].map(([v, l]) => `<label class="opt"><input type="radio" name="theme" value="${v}" ${theme === v ? 'checked' : ''} data-change="theme"><span><b>${l}</b></span></label>`).join('')}</div>
+        <p class="small muted" style="margin-top:8px">위쪽 막대의 🌙/☀️ 단추로도 바로 바꿀 수 있습니다.</p></div>
+      ${App.autoCard()}
       <div class="card"><h2>이 게임</h2><div class="kv small"><span>시작 시즌</span><span>${U.seasonLabel(G.startYear)}</span><span>현재 시즌</span><span>${U.seasonLabel(G.season)}</span><span>선수 성장</span><span>${G.settings.prog === 'real' ? '실제 커리어 따라가기' : '무작위 성장'}</span><span>리그</span><span>${G.teams.length}개 팀</span></div>
         <div class="row" style="margin-top:10px"><select data-change="progMode"><option value="real" ${G.settings.prog === 'real' ? 'selected' : ''}>실제 커리어 따라가기</option><option value="random" ${G.settings.prog === 'random' ? 'selected' : ''}>무작위 성장</option></select></div></div>
       <div class="card"><h2>자료</h2><p class="small muted">선수 능력치는 Basketball-Reference 기록(1976-77 ~ 2026-27 시즌 초)을 바탕으로 계산했습니다. 팀·선수 이름은 실제 NBA를 따르지만, 이 게임은 NBA와 관계없는 팬 제작 시뮬레이션입니다. 계약 금액은 실제 계약이 아니라 능력과 당시 샐러리캡으로 추정한 값입니다.</p></div>
     </div>`;
+  };
+  // 자동 진행(턴 끄기)
+  App.autoCard = () => {
+    const A = Season.autoSet(G_());
+    const tog = (k, title, desc) => `<label class="opt"><input type="checkbox" ${A[k] ? 'checked' : ''} data-change="autoTog" data-k="${k}"><span><b>${title}</b><span class="small muted">${desc}</span></span></label>`;
+    const sel = (k, title, opts) => `<div><h3>${title}</h3><div class="grid">${opts.map(([v, l, d]) => `<label class="opt"><input type="radio" name="auto-${k}" value="${v}" ${A[k] === v ? 'checked' : ''} data-change="autoSel" data-k="${k}"><span><b>${l}</b><span class="small muted">${d}</span></span></label>`).join('')}</div></div>`;
+    return `<div class="card span2" id="autoCard"><h2>자동 진행(턴 끄기) <span class="r"><button class="btn sm" data-act="autoPreset" data-p="fast">빠르게: 지루한 부분 모두 자동</button> <button class="btn sm" data-act="autoPreset" data-p="full">모두 직접</button></span></h2>
+      <p class="small muted">끈 단계는 코치진이 알아서 처리하고 멈추지 않고 넘어갑니다. 위쪽 <b>계속 ▾</b> 메뉴의 건너뛰기(1주일·트레이드 마감까지·시즌 끝까지·오프시즌 건너뛰기·다음 시즌 개막까지)와 함께 쓰세요.</p>
+      <div class="grid g2" style="margin-top:10px">
+        ${sel('games', '우리 경기 날 멈추기', [['all', '모든 경기', '경기마다 멈춥니다'], ['playoffs', '플레이오프만', '정규시즌 경기는 자동으로 치릅니다'], ['none', '멈추지 않음', '모든 경기를 자동으로 치르고, 계속을 누르면 1주일씩 진행합니다']])}
+        ${sel('gameMode', '멈췄을 때 경기 방식', [['ask', '매번 묻기', '경기 전 화면에서 고릅니다'], ['live', '바로 생중계', '경기 전 화면 없이 생중계로'], ['quick', '바로 결과', '경기 전 화면 없이 결과만']])}
+      </div>
+      <h3 style="margin-top:14px">코치에게 맡길 단계(턴 끄기)</h3>
+      <div class="grid g2">
+        ${tog('preseason', '프리시즌 건너뛰기', '새 시즌이 오면 바로 개막까지 진행합니다. 로스터가 넘치면 코치가 정리합니다.')}
+        ${tog('draft', '드래프트 자동', '우리 지명도 코치가 합니다(대체로 실제 평가 순서를 따릅니다).')}
+        ${tog('resign', '재계약 자동', '계약이 끝나는 선수를 코치가 판단해 재계약하거나 보냅니다.')}
+        ${tog('fa', '자유계약 시장 자동', 'FA 기간을 멈추지 않고 넘기며, 코치가 필요한 선수와 계약합니다.')}
+      </div>
+      <h3 style="margin-top:14px">알림·정지</h3>
+      <div class="grid g3">
+        ${tog('halftime', '생중계 하프타임 정지', '하프타임에 잠깐 멈춥니다.')}
+        ${tog('offers', 'AI 트레이드 제안 받기', '끄면 다른 구단이 제안을 보내지 않습니다.')}
+        ${tog('minorInjury', '가벼운 부상 알림', '끄면 7일 이상 결장하는 부상만 알립니다.')}
+      </div></div>`;
+  };
+  A.autoTog = el => { Season.autoSet(G_())[el.dataset.k] = el.checked; App.toast('설정을 바꿨습니다'); App.autosave(); };
+  A.autoSel = el => { Season.autoSet(G_())[el.dataset.k] = el.value; App.toast('설정을 바꿨습니다'); App.autosave(); App.rerender(); };
+  A.autoPreset = el => {
+    const A2 = Season.autoSet(G_());
+    if (el.dataset.p === 'fast') Object.assign(A2, { games: 'playoffs', gameMode: 'ask', preseason: true, draft: true, resign: true, fa: true, halftime: false, minorInjury: false });
+    else Object.assign(A2, { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true });
+    App.toast(el.dataset.p === 'fast' ? '지루한 부분을 모두 자동으로 바꿨습니다' : '모든 단계를 직접 하도록 바꿨습니다'); App.autosave(); App.rerender();
   };
   A.saveNow = () => App.save();
   A.exportSave = () => HM.Store.exportFile(G_());
@@ -3825,10 +3965,6 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   A.autosave = el => { G_().settings.autosave = el.checked; };
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };
-  App.setTheme = v => {
-    try { localStorage.setItem('hw-theme', v); } catch (e) { /* 무시 */ }
-    if (v === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v);
-  };
 
   // ---------- 해임 ----------
   S.fired = () => {
@@ -4215,7 +4351,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       lv.game.next();
       if (lv.game.done) return finishLive();
       // 하프타임에 잠깐 멈춘다
-      if (!lv.half && lv.game.q === 3) { lv.half = true; lv.paused = true; liveUpdate(); App.toast('하프타임 — 전술과 로테이션을 점검하세요', 3000); return; }
+      if (!lv.half && lv.game.q === 3) { lv.half = true; if (Season.autoSet(G_()).halftime) { lv.paused = true; liveUpdate(); App.toast('하프타임 — 전술과 로테이션을 점검하세요', 3000); return; } }
       liveUpdate();
       lv.timer = setTimeout(tick, SPEEDS[lv.speed]);
     };
@@ -4261,7 +4397,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       `<span class="pill ${game.score[lv.side] > game.score[1 - lv.side] ? 'good' : 'bad'}">${game.score[lv.side] > game.score[1 - lv.side] ? '승리!' : '패배'}</span><a class="btn" href="#/game/${lv.g.gid}" data-act="liveBox">박스스코어</a><button class="btn pri" data-act="liveDone">계속</button>` :
       `<button class="btn ${lv.paused ? 'pri' : ''}" data-act="livePause">${lv.paused ? '▶ 재개' : '⏸ 멈춤'}</button>
        ${[1, 2, 3, 4].map(s => `<button class="btn sm ${lv.speed === s ? 'pri' : ''}" data-act="liveSpeed" data-s="${s}">${['', '느리게', '보통', '빠르게', '아주 빠르게'][s]}</button>`).join('')}
-       <span class="sp"></span><button class="btn" data-act="liveTac">작전 지시</button><button class="btn" data-act="liveSub">선수 교체</button><button class="btn" data-act="liveEnd">끝까지 진행</button>`;
+       <span class="sp"></span><button class="btn" data-act="liveTac">작전 지시</button><button class="btn" data-act="liveSub">선수 교체</button>
+       <button class="btn" data-act="liveSkip" data-to="q">다음 쿼터로 ⏭</button>${game.q < 4 || (game.q === 4 && game.clock > 300) ? '<button class="btn" data-act="liveSkip" data-to="clutch">4쿼터 막판(5분)으로 ⏭</button>' : ''}<button class="btn" data-act="liveEnd">끝까지 ⏭</button>`;
     const feed = document.getElementById('lv-feed');
     if (feed) {
       const ev = game.log.slice(-160).reverse();
@@ -4299,6 +4436,20 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     let guard = 0;
     while (!game.done && guard++ < 3000) game.next();
     finishLive();
+  };
+  // 지루한 구간 건너뛰기: 다음 쿼터 / 4쿼터 막판
+  A.liveSkip = el => {
+    const lv = App.live; const game = lv.game;
+    const wasPaused = lv.paused;
+    App.pauseLive();
+    const q0 = game.q;
+    let guard = 0;
+    if (el.dataset.to === 'q') { while (!game.done && game.q === q0 && guard++ < 3000) game.next(); }
+    else { while (!game.done && !(game.q >= 4 && game.clock <= 300) && guard++ < 3000) game.next(); }
+    if (game.q >= 3) lv.half = true;
+    if (game.done) return finishLive();
+    game.say(-1, el.dataset.to === 'q' ? `— ${game.q <= 4 ? game.q + '쿼터' : '연장'} 시작까지 건너뜀 —` : '— 4쿼터 막판까지 건너뜀 —', 'period');
+    if (wasPaused) liveUpdate(); else App.resumeLive();
   };
   A.liveBox = el => { location.hash = el.getAttribute('href'); };
   A.liveDone = () => {
@@ -4394,7 +4545,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const colors = d.colors;
     const tsel = teams.find(t => t.abbr === sel.abbr);
     return `<div class="title"><div class="wrap">
-      <div class="hero"><div class="ball"></div><div><h1>하드우드 매니저</h1><p>실제 NBA 역사 위에서 펼치는 농구 감독 시뮬레이션 · ${U.seasonLabel(d.first)} ~ ${U.seasonLabel(d.last)}</p></div></div>
+      <div class="hero"><div class="ball"></div><div style="flex:1;min-width:0"><h1>하드우드 매니저</h1><p>실제 NBA 역사 위에서 펼치는 농구 감독 시뮬레이션 · ${U.seasonLabel(d.first)} ~ ${U.seasonLabel(d.last)}</p></div>${App.themeBtn()}</div>
       <div id="saves"></div>
       <div class="card" style="margin-top:14px">
         <h2>새 게임</h2>
@@ -4486,7 +4637,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 // 시작
 (function () {
   const HM = globalThis.HM, App = HM.App;
-  try { const th = localStorage.getItem('hw-theme'); if (th && th !== 'system') document.documentElement.setAttribute('data-theme', th); } catch (e) { /* 무시 */ }
+  App.applyTheme();
   // 진행 중인 생중계가 있으면 계속 단추는 생중계로
   const cont = App.cont;
   App.cont = (mode) => {

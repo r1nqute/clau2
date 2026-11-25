@@ -40,6 +40,23 @@
   App.pg = (l, k, d = 1) => l && l.gp ? (l[k] / l.gp).toFixed(d) : '-';
   App.pct = (a, b) => b ? (a / b * 100).toFixed(1) : '-';
 
+  // ---------- 테마(다크 모드) ----------
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  App.themePref = () => { try { return localStorage.getItem('hw-theme') || 'dark'; } catch (e) { return 'dark'; } };
+  App.isDark = () => { const t = App.themePref(); return t === 'dark' || (t === 'system' && !!(mq && mq.matches)); };
+  App.applyTheme = () => {
+    const t = App.themePref();
+    if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+    let m = document.querySelector('meta[name="theme-color"]');
+    if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+    m.content = App.isDark() ? '#1a2129' : '#ffffff';
+    document.querySelectorAll('[data-act="themeToggle"]').forEach(b => { b.textContent = App.isDark() ? '☀️' : '🌙'; b.title = App.isDark() ? '밝은 화면으로' : '다크 모드로'; });
+  };
+  App.setTheme = v => { try { localStorage.setItem('hw-theme', v); } catch (e) { /* 무시 */ } App.applyTheme(); };
+  App.acts.themeToggle = () => { App.setTheme(App.isDark() ? 'light' : 'dark'); App.toast(App.isDark() ? '다크 모드' : '밝은 화면'); if (App.route.name === 'settings') App.rerender(); };
+  App.themeBtn = () => `<button class="iconbtn" data-act="themeToggle" title="${App.isDark() ? '밝은 화면으로' : '다크 모드로'}" aria-label="테마 바꾸기">${App.isDark() ? '☀️' : '🌙'}</button>`;
+  if (mq && mq.addEventListener) mq.addEventListener('change', () => App.applyTheme());
+
   // ---------- 정렬되는 표 ----------
   // cols: [{k, label, cls, f(row)->html, v(row)->정렬값, title}]
   App.table = (id, cols, rows, opt = {}) => {
@@ -113,6 +130,7 @@
         <a class="topteam" href="#/home"><span class="tbadge" style="${App.tstyle(t)}">${esc(t.abbr)}</span>
           <span class="meta"><b>${esc(t.ko)}</b><span>${r.w}승 ${r.l}패 · ${App.phaseTxt(G.phase)}</span></span></a>
         <div class="topdate"><b>${U.fmtDate(G.date)}</b><span>${U.seasonLabel(G.season)} 시즌</span></div>
+        ${App.themeBtn()}
         <div class="cont"><button data-act="cont" data-mode="next">${contLabel} ▸</button><button class="more" data-act="contMenu" aria-label="진행 방식">▾</button></div>
       </header>
       <nav id="side" class="nav">${nav}</nav>
@@ -128,7 +146,8 @@
     if (G.phase === 'resign') return 'FA 시장 열기';
     if (G.phase === 'preseason') return '개막까지';
     if (G.phase === 'fa') return '다음 날';
-    if (Season.userGameToday(G)) return '경기 시작';
+    const ug = Season.userGameToday(G);
+    if (ug && stopForGame(G, Season.autoSet(G), 'next', ug)) return '경기 시작';
     return '계속';
   };
 
@@ -209,34 +228,59 @@
   App.acts.contMenu = () => {
     const G = App.G;
     const inSeason = ['regular', 'playin', 'playoffs'].includes(G.phase);
+    const off = ['draft', 'resign', 'fa'].includes(G.phase);
     const opts = [];
     if (inSeason) {
-      opts.push(['next', '다음 경기까지', '우리 경기 날 멈추고 경기를 지휘합니다']);
+      opts.push(['next', '다음 경기까지', '우리 경기 날 멈춥니다(설정에 따라)']);
       opts.push(['day', '하루', '하루만 진행합니다']);
-      opts.push(['week', '1주일(자동 경기)', '우리 경기도 자동으로 치릅니다']);
-      opts.push(['month', '1개월(자동 경기)', '']);
+      opts.push(['week', '1주일 건너뛰기', '우리 경기도 자동으로 치릅니다']);
+      opts.push(['month', '1개월 건너뛰기', '']);
+      if (G.phase === 'regular' && G.date <= G.cal.deadline) opts.push(['deadline', '트레이드 마감까지', `${U.fmtDateShort(G.cal.deadline)}까지 자동`]);
       if (G.phase === 'regular') opts.push(['season', '정규시즌 끝까지', '플레이오프 직전까지 모두 자동']);
-      opts.push(['post', '시즌 끝까지', '플레이오프까지 모두 자동(드래프트 전까지)']);
-    } else if (G.phase === 'fa') {
-      opts.push(['day', '하루', '']); opts.push(['week', '1주일', '']); opts.push(['month', '1개월', '']); opts.push(['season', '프리시즌까지', 'FA 시장을 끝냅니다']);
+      opts.push(['post', '시즌 끝까지', '플레이오프까지 모두 자동(드래프트 직전에서 멈춤)']);
+      opts.push(['nextseason', '다음 시즌 개막까지', '플레이오프·드래프트·재계약·FA를 모두 코치에게 맡기고 건너뜁니다']);
+    } else if (off) {
+      if (G.phase === 'fa') { opts.push(['day', '하루', '']); opts.push(['week', '1주일', '']); }
+      opts.push(['offseason', '오프시즌 건너뛰기', '남은 드래프트·재계약·FA를 코치에게 맡기고 프리시즌으로']);
+      opts.push(['nextseason', '다음 시즌 개막까지', '오프시즌을 모두 건너뛰고 개막일로']);
     } else if (G.phase === 'preseason') {
       opts.push(['next', '개막까지', '']); opts.push(['day', '하루', '']);
-    } else opts.push(['next', App.contLabel(), '']);
-    App.modal('진행 방식', `<div class="grid">${opts.map(o => `<button class="btn" style="justify-content:flex-start;padding:12px" data-act="cont" data-mode="${o[0]}"><b>${o[1]}</b><span class="muted small">${o[2]}</span></button>`).join('')}</div>`);
+    }
+    if (!opts.length) opts.push(['next', App.contLabel(), '']);
+    App.modal('진행 방식', `<div class="grid">${opts.map(o => `<button class="btn" style="justify-content:flex-start;padding:12px;flex-wrap:wrap;gap:8px" data-act="cont" data-mode="${o[0]}"><b>${o[1]}</b><span class="muted small">${o[2]}</span></button>`).join('')}</div>
+      <div class="row" style="margin-top:12px"><a class="lnk small" href="#/settings" data-act="closeModalGo">⚙️ 자동 진행(턴 끄기) 설정</a></div>`);
   };
+  App.acts.closeModalGo = el => { App.closeModal(); location.hash = el.getAttribute('href'); };
 
   App.acts.cont = el => App.cont(el.dataset.mode || 'next');
+
+  // 우리 경기 날 멈출지
+  function stopForGame(G, A, mode, ug) {
+    if (mode !== 'next' && mode !== 'day') return false;
+    if (A.games === 'none') return false;
+    if (A.games === 'playoffs' && ug.type === 'reg') return false;
+    return true;
+  }
+  App.startUserGame = ug => {
+    const A = Season.autoSet(App.G);
+    if (A.gameMode === 'live') return App.acts.liveGame();
+    if (A.gameMode === 'quick') return App.acts.quickGame();
+    return App.preMatch(ug);
+  };
 
   App.cont = async (mode = 'next') => {
     const G = App.G;
     App.closeModal();
     if (App.running) return;
     if (G.fired) return App.go('#/fired');
-    if (G.phase === 'draft') {
+    const A = Season.autoSet(G);
+    const skipOff = mode === 'offseason' || mode === 'nextseason';
+    // 직접 처리하는 드래프트·재계약
+    if (G.phase === 'draft' && !A.draft && !skipOff) {
       if (location.hash !== '#/draft') { App.go('#/draft'); return; }
       return App.acts.draftAuto();
     }
-    if (G.phase === 'resign') {
+    if (G.phase === 'resign' && !A.resign && !skipOff) {
       const exp = L.roster(G, G.userTid).filter(p => p.contract && p.contract.exp <= G.season);
       if (exp.length) {
         const ok = await App.confirm('자유계약 시장으로', `재계약하지 않은 선수 ${exp.length}명(${exp.map(p => esc(p.name)).join(', ')})은 자유계약 선수가 됩니다. 계속할까요?`, '계속');
@@ -244,41 +288,58 @@
       }
       Season.endResign(G);
       App.autosave();
-      return App.go('#/fa');
+      if (!A.fa) return App.go('#/fa');
     }
     App.running = true;
-    const startDate = G.date, startPhase = G.phase, startSeason = G.season;
-    const limit = { day: 1, week: 7, month: 30 }[mode] || 9999;
+    const startPhase = G.phase, startSeason = G.season;
+    const noGameStops = A.games === 'none' || (A.games === 'playoffs' && G.phase === 'regular');
+    const limit = { day: 1, week: 7, month: 30 }[mode] || (mode === 'next' && noGameStops && G.phase === 'regular' ? 7 : 9999);
+    const autoUser = A.fa || skipOff;
+    const autoRoster = A.preseason || skipOff || A.games === 'none';
     let days = 0, lastYield = Date.now();
+    let w = 0, l = 0;
     const offersBefore = G.inbox.filter(m => m.type === 'offer' && !m.done).length;
+    const countGame = () => {
+      const g = G.lastUserGame && G.schedule.find(x => x.gid === G.lastUserGame);
+      if (g && g.played && g !== countGame.last) { countGame.last = g; const home = g.h === G.userTid; if ((home ? g.hs : g.as) > (home ? g.as : g.hs)) w++; else l++; }
+    };
+    let stopReason = null;
     try {
       while (true) {
         if (G.fired) break;
+        // 코치에게 맡긴 단계는 그 자리에서 처리
+        if (G.phase === 'draft') {
+          if (A.draft || skipOff) { Season.autoDraftAll(G); continue; }
+          break;
+        }
+        if (G.phase === 'resign') {
+          if (A.resign || skipOff) { Season.autoResignUser(G); Season.endResign(G); continue; }
+          break;
+        }
         const ug = Season.userGameToday(G);
-        if (ug && (mode === 'next' || mode === 'day')) {
-          App.running = false;
-          App.render();
-          return App.preMatch(ug);
-        }
-        const r = Season.day(G);
-        if (r === 'roster') {
-          App.running = false; App.busy(false);
-          App.modal('로스터 초과', `개막을 앞두고 로스터가 ${L.roster(G, G.userTid).length}명입니다. 15명 이하로 줄여야 정규시즌을 시작할 수 있습니다.<br><br>선수단 화면에서 선수를 방출하거나 트레이드하세요.`, '<button class="btn pri" data-act="goSquad">선수단으로</button>');
-          App.rerender();
-          return;
-        }
+        if (ug && stopForGame(G, A, mode, ug)) { stopReason = { game: ug }; break; }
+        const r = Season.day(G, null, { autoUser, autoRoster });
+        countGame();
+        if (r === 'roster') { stopReason = 'roster'; break; }
         if (r === 'wait') break;
         days++;
         if (r === 'phase') {
-          const keepGoing = (mode === 'post' && ['playin', 'playoffs'].includes(G.phase)) || (mode === 'season' && G.phase === 'fa');
-          if (!keepGoing) break;
+          const ph = G.phase;
+          let keep = false;
+          if (mode === 'post') keep = ph === 'playin' || ph === 'playoffs';
+          else if (mode === 'offseason') keep = ph !== 'preseason' || A.preseason;
+          else if (mode === 'nextseason') keep = ph !== 'regular';
+          else if (mode === 'next') keep = (ph === 'fa' && A.fa) || (ph === 'preseason' && A.preseason) || (ph === 'draft' && A.draft) || (ph === 'resign' && A.resign);
+          if (mode === 'offseason' && ph === 'regular') keep = false;
+          if (!keep) break;
         }
-        if (G.season !== startSeason && G.phase === 'preseason') break;
+        if (mode === 'deadline' && G.date > G.cal.deadline) break;
+        if (mode === 'next' && G.phase === 'fa' && !A.fa && days >= 1) break;
         if (days >= limit) break;
-        if (mode === 'next' && G.inbox.filter(m => m.type === 'offer' && !m.done).length > offersBefore) break;
+        if ((mode === 'next' || mode === 'day') && G.inbox.filter(m => m.type === 'offer' && !m.done).length > offersBefore) break;
         if (Date.now() - lastYield > 120) {
-          const frac = mode === 'season' || mode === 'post' ? null : Math.min(1, days / Math.min(limit, 60));
-          App.busy(true, `${U.fmtDate(G.date)} 진행 중…`, frac);
+          const frac = limit < 9999 ? Math.min(1, days / limit) : null;
+          App.busy(true, `${U.fmtDate(G.date)} · ${App.phaseTxt(G.phase)} 진행 중…`, frac);
           await sleep(0);
           lastYield = Date.now();
         }
@@ -286,13 +347,21 @@
     } catch (e) { console.error(e); App.toast('오류: ' + e.message, 5000); }
     App.running = false;
     App.busy(false);
-    void startDate; void startPhase;
     App.autosave();
     if (G.fired) return App.go('#/fired');
+    if (stopReason === 'roster') {
+      App.modal('로스터 초과', `개막을 앞두고 로스터가 ${L.roster(G, G.userTid).length}명입니다. 15명 이하로 줄여야 정규시즌을 시작할 수 있습니다.<br><br>선수단 화면에서 선수를 방출하거나 트레이드하세요. (설정에서 <b>프리시즌 건너뛰기</b>를 켜면 코치진이 알아서 정리합니다.)`, '<button class="btn pri" data-act="goSquad">선수단으로</button>');
+      App.rerender();
+      return;
+    }
+    if (w + l > 1) App.toast(`${days}일 진행 · 우리 팀 ${w}승 ${l}패`, 3000);
+    if (stopReason && stopReason.game) { App.render(); return App.startUserGame(stopReason.game); }
     if (G.phase === 'draft' && startPhase !== 'draft') return App.go('#/draft');
+    if (G.phase === 'resign' && startPhase !== 'resign') return App.go('#/finance');
+    if (G.phase === 'fa' && startPhase !== 'fa') return App.go('#/fa');
     if (G.phase !== startPhase && (G.phase === 'playoffs' || G.phase === 'playin')) return App.go('#/standings');
+    if (G.season !== startSeason && (G.phase === 'preseason' || G.phase === 'regular')) return App.go('#/inbox');
     App.rerender();
-    if (G.phase === 'preseason' && startPhase === 'fa') App.go('#/inbox');
   };
   App.acts.goSquad = () => { App.closeModal(); App.go('#/squad'); };
 

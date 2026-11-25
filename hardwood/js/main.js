@@ -1,7 +1,7 @@
 // 시작
 (function () {
   const HM = globalThis.HM, App = HM.App;
-  try { const th = localStorage.getItem('hw-theme'); if (th && th !== 'system') document.documentElement.setAttribute('data-theme', th); } catch (e) { /* 무시 */ }
+  App.applyTheme();
   // 진행 중인 생중계가 있으면 계속 단추는 생중계로
   const cont = App.cont;
   App.cont = (mode) => {

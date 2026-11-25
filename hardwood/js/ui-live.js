@@ -78,7 +78,7 @@
       lv.game.next();
       if (lv.game.done) return finishLive();
       // 하프타임에 잠깐 멈춘다
-      if (!lv.half && lv.game.q === 3) { lv.half = true; lv.paused = true; liveUpdate(); App.toast('하프타임 — 전술과 로테이션을 점검하세요', 3000); return; }
+      if (!lv.half && lv.game.q === 3) { lv.half = true; if (Season.autoSet(G_()).halftime) { lv.paused = true; liveUpdate(); App.toast('하프타임 — 전술과 로테이션을 점검하세요', 3000); return; } }
       liveUpdate();
       lv.timer = setTimeout(tick, SPEEDS[lv.speed]);
     };
@@ -124,7 +124,8 @@
       `<span class="pill ${game.score[lv.side] > game.score[1 - lv.side] ? 'good' : 'bad'}">${game.score[lv.side] > game.score[1 - lv.side] ? '승리!' : '패배'}</span><a class="btn" href="#/game/${lv.g.gid}" data-act="liveBox">박스스코어</a><button class="btn pri" data-act="liveDone">계속</button>` :
       `<button class="btn ${lv.paused ? 'pri' : ''}" data-act="livePause">${lv.paused ? '▶ 재개' : '⏸ 멈춤'}</button>
        ${[1, 2, 3, 4].map(s => `<button class="btn sm ${lv.speed === s ? 'pri' : ''}" data-act="liveSpeed" data-s="${s}">${['', '느리게', '보통', '빠르게', '아주 빠르게'][s]}</button>`).join('')}
-       <span class="sp"></span><button class="btn" data-act="liveTac">작전 지시</button><button class="btn" data-act="liveSub">선수 교체</button><button class="btn" data-act="liveEnd">끝까지 진행</button>`;
+       <span class="sp"></span><button class="btn" data-act="liveTac">작전 지시</button><button class="btn" data-act="liveSub">선수 교체</button>
+       <button class="btn" data-act="liveSkip" data-to="q">다음 쿼터로 ⏭</button>${game.q < 4 || (game.q === 4 && game.clock > 300) ? '<button class="btn" data-act="liveSkip" data-to="clutch">4쿼터 막판(5분)으로 ⏭</button>' : ''}<button class="btn" data-act="liveEnd">끝까지 ⏭</button>`;
     const feed = document.getElementById('lv-feed');
     if (feed) {
       const ev = game.log.slice(-160).reverse();
@@ -162,6 +163,20 @@
     let guard = 0;
     while (!game.done && guard++ < 3000) game.next();
     finishLive();
+  };
+  // 지루한 구간 건너뛰기: 다음 쿼터 / 4쿼터 막판
+  A.liveSkip = el => {
+    const lv = App.live; const game = lv.game;
+    const wasPaused = lv.paused;
+    App.pauseLive();
+    const q0 = game.q;
+    let guard = 0;
+    if (el.dataset.to === 'q') { while (!game.done && game.q === q0 && guard++ < 3000) game.next(); }
+    else { while (!game.done && !(game.q >= 4 && game.clock <= 300) && guard++ < 3000) game.next(); }
+    if (game.q >= 3) lv.half = true;
+    if (game.done) return finishLive();
+    game.say(-1, el.dataset.to === 'q' ? `— ${game.q <= 4 ? game.q + '쿼터' : '연장'} 시작까지 건너뜀 —` : '— 4쿼터 막판까지 건너뜀 —', 'period');
+    if (wasPaused) liveUpdate(); else App.resumeLive();
   };
   A.liveBox = el => { location.hash = el.getAttribute('href'); };
   A.liveDone = () => {
