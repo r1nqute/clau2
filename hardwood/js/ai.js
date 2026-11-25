@@ -385,7 +385,7 @@
         const p = L.genPlayer(G, { ovr: 62 + Math.random() * 5, pa: 66, age: 23 + Math.random() * 6, tid });
         G.players[p.pid] = p; p.contract = { amt: F.minSal(cy), exp: cy }; out.push(p); continue;
       }
-      fa.tid = tid; fa.contract = { amt: F.minSal(cy), exp: cy }; out.push(fa);
+      fa.tid = tid; fa.contract = { amt: F.minSal(cy), exp: cy }; fa.signedDate = G.date; out.push(fa);
     }
     return out;
   }

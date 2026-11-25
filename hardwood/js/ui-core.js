@@ -392,7 +392,7 @@
     if (!m) return;
     m.read = true;
     App.modal('🔔 관심 FA가 시장에 나왔습니다', `<div class="mbody">${m.body}</div>`,
-      `<button class="btn" data-act="cont" data-mode="next">계속 진행</button><a class="btn pri" href="#/fa" data-act="closeModalGo">자유계약 화면으로</a>`);
+      `<button class="btn" data-act="cont" data-mode="next">계속 진행</button><button class="btn pri" data-act="scoutGo" data-id="${m.id}">자유계약 화면에서 보기</button>`);
   };
 
   // 받은 편지함 읽지 않은 중요 메시지

@@ -875,7 +875,7 @@
         const healthy = ps.filter(p => !(p.injury && p.injury.days > 0)).length;
         if (healthy < 10 && ps.length < 15) {
           const fa = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
-          if (fa) { fa.tid = t.tid; fa.contract = { amt: F.minSal(G.season), exp: G.season }; }
+          if (fa) { fa.tid = t.tid; fa.contract = { amt: F.minSal(G.season), exp: G.season }; fa.signedDate = G.date; }
         }
       }
       if (beforeDeadline && Math.random() < 0.045) {

@@ -88,7 +88,7 @@
     if (sel && sel.type === 'offer' && !sel.done) actions = `<div class="row" style="margin-top:14px"><button class="btn pri" data-act="offerAccept" data-id="${sel.id}">수락</button><button class="btn" data-act="offerDecline" data-id="${sel.id}">거절</button><button class="btn" data-act="offerEdit" data-id="${sel.id}">트레이드 화면에서 수정</button></div>`;
     if (sel && sel.type === 'scout' && sel.pids) {
       const still = sel.pids.map(id => G.players[id]).filter(p => p && p.tid === -1);
-      actions += still.length ? `<div class="row" style="margin-top:14px">${still.map(p => `<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">${esc(p.name)} 협상</button>`).join('')}<a class="btn" href="#/fa">자유계약 화면</a></div>` : '<div class="note" style="margin-top:12px">이 선수들은 이미 시장을 떠났습니다.</div>';
+      actions += still.length ? `<div class="row" style="margin-top:14px">${still.map(p => `<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">${esc(p.name)} 협상</button>`).join('')}<button class="btn" data-act="scoutGo" data-id="${sel.id}">자유계약 화면에서 보기</button></div>` : `<div class="note" style="margin-top:12px">이 선수들은 이미 시장을 떠났습니다: ${sel.pids.map(id => G.players[id]).filter(Boolean).map(p => `${esc(p.name)} → ${p.tid >= 0 ? esc(G.teams[p.tid].ko) : p.tid === -3 ? '은퇴' : '시장 밖'}`).join(', ')}</div>`;
     }
     if (sel && sel.pid && G.players[sel.pid]) actions += `<div style="margin-top:12px"><a class="btn" href="#/player/${sel.pid}">선수 정보</a></div>`;
     return `<h1>받은 편지함</h1>
