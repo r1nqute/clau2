@@ -48,10 +48,11 @@ button { font: inherit; color: inherit; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* ---------- 틀 ---------- */
-#app { display: grid; grid-template-columns: 210px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
-#top { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 30; }
-#side { background: var(--panel); border-right: 1px solid var(--line); padding: 10px 8px; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; }
-#main { padding: 16px 18px 90px; min-width: 0; }
+#app { display: grid; grid-template-columns: 210px 1fr; grid-template-rows: 56px 1fr; min-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+#top { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 31; background: var(--panel); }
+#side { background: var(--panel); border-right: 1px solid var(--line); padding: 10px 8px; padding-left: max(8px, env(safe-area-inset-left, 0px)); position: sticky; top: calc(56px + env(safe-area-inset-top, 0px)); height: calc(100vh - 56px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+#main { padding-block: 16px 90px; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); min-width: 0; }
 .brand { font-weight: 800; letter-spacing: -.02em; font-size: 15px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .brand i { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff9a3c, #d4560b); display: inline-block; box-shadow: inset 0 0 0 2px rgba(0,0,0,.15); }
 .topteam { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -215,7 +216,7 @@ table.t .nm { font-weight: 700; }
 .bcol { display: grid; gap: 10px; }
 
 /* 모달 */
-#modal { position: fixed; inset: 0; background: rgba(5,10,15,.55); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+#modal { position: fixed; inset: 0; background: rgba(5,10,15,.55); display: none; align-items: center; justify-content: center; z-index: 100; padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 #modal.on { display: flex; }
 #modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
 #modal .box.wide { width: min(980px, 100%); }
@@ -224,7 +225,7 @@ table.t .nm { font-weight: 700; }
 #modal .mh .x { margin-left: auto; background: none; border: 0; font-size: 20px; cursor: pointer; color: var(--muted); }
 #modal .mb { padding: 16px; }
 #modal .mf { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; background: var(--panel); }
-#toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 700; z-index: 120; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); }
+#toast { position: fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 700; z-index: 120; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); }
 #toast.on { opacity: 1; }
 #busy { position: fixed; inset: 0; background: rgba(5,10,15,.45); display: none; align-items: center; justify-content: center; z-index: 110; }
 #busy.on { display: flex; }
@@ -232,7 +233,7 @@ table.t .nm { font-weight: 700; }
 #busy .bar { margin-top: 10px; }
 
 /* 새 게임 */
-.title { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; align-items: start; padding: 28px 16px 60px; }
+.title { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; align-items: start; padding-block: 28px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 select { max-width: 100%; }
 .title .wrap { width: min(1100px, 100%); }
 .hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
@@ -254,16 +255,16 @@ select { max-width: 100%; }
 /* 휴대폰 */
 @media (max-width: 860px) {
   #app { grid-template-columns: 1fr; grid-template-rows: 52px 1fr; }
-  #top { padding: 0 8px; gap: 8px; }
+  #top { gap: 8px; }
   .menu-btn { display: block; }
   .brand span { display: none; }
-  #side { position: fixed; left: 0; top: 52px; bottom: 0; width: 240px; height: auto; z-index: 40; transform: translateX(-105%); transition: transform .2s; box-shadow: var(--shadow); }
+  #side { position: fixed; left: 0; top: calc(52px + env(safe-area-inset-top, 0px)); bottom: 0; width: 240px; height: auto; z-index: 40; transform: translateX(-105%); transition: transform .2s; box-shadow: var(--shadow); padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   #side.open { transform: none; }
-  #main { padding: 12px 12px 96px; }
+  #main { padding-block: 12px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .topdate { display: none; }
   #top .iconbtn { margin-left: auto; width: 34px; height: 34px; }
   #top .cont { display: none; }
-  #bottombar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); gap: 10px; align-items: center; }
+  #bottombar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--panel); border-top: 1px solid var(--line); padding-top: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); gap: 10px; align-items: center; }
   #bottombar .d { line-height: 1.2; min-width: 0; flex: 1; }
   #bottombar .d b { font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #bottombar .d span { font-size: 11px; color: var(--muted); }
@@ -2991,14 +2992,26 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       await tx('data', 'readwrite', s => s.delete(id));
       await tx('meta', 'readwrite', s => s.delete(id));
     },
-    exportFile(G) {
-      const blob = new Blob([JSON.stringify(G)], { type: 'application/json' });
-      const a = document.createElement('a');
+    // 파일로 내보내기. claude.ai 아티팩트 안에서는 downloads 기능으로, 단독 실행이면 일반 내려받기로.
+    // 반환: 'saved' | 'declined' | 'unavailable'
+    async exportFile(G) {
       const t = G.teams[G.userTid];
+      const filename = `hardwood-${t.abbr}-${G.season}-${G.date}.json`;
+      const blob = new Blob([JSON.stringify(G)], { type: 'application/json' });
+      const c = globalThis.claude;
+      if (c && typeof c.use === 'function') {
+        let dl = null;
+        try { dl = await c.use('downloads'); } catch (e) { dl = null; }
+        if (!dl) return 'unavailable';
+        try { await dl.save({ filename, data: blob }); return 'saved'; }
+        catch (e) { return e && e.code === 'declined' ? 'declined' : 'unavailable'; }
+      }
+      const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `hardwood-${t.abbr}-${G.season}-${G.date}.json`;
+      a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      return 'saved';
     },
     parseImport(text) {
       const G = JSON.parse(text);
@@ -3185,19 +3198,34 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     App.keepScroll = false;
   };
   App.rerender = () => { App.keepScroll = true; App.render(); };
-  App.go = h => { if (location.hash === h) App.render(); else location.hash = h; };
-
-  function parseHash() {
-    const h = location.hash.replace(/^#\/?/, '');
+  // 화면 이동: 단독 실행이면 주소의 #/화면, 다른 페이지 안(아티팩트 등)이면 페이지 안에서만 옮긴다
+  let framed = false;
+  try { framed = window.self !== window.top; } catch (e) { framed = true; }
+  App.useHash = !framed;
+  function parseHash(hs) {
+    const h = String(hs ?? location.hash).replace(/^#\/?/, '');
     const [name, ...params] = h.split('/');
     return { name: name || (App.G ? 'home' : 'title'), params: params.map(decodeURIComponent) };
   }
-  window.addEventListener('hashchange', () => {
-    App.route = parseHash();
+  function routeTo(h) {
+    App.route = parseHash(h);
     const side = document.getElementById('side'); if (side) side.classList.remove('open');
-    if (App.live && App.route.name !== 'live' && App.live.timer) { /* 생중계는 뒤에서 멈춤 */ App.pauseLive && App.pauseLive(); }
+    if (App.live && App.route.name !== 'live' && App.live.timer) App.pauseLive && App.pauseLive();
     App.render();
-  });
+  }
+  App.go = h => {
+    if (!App.useHash) return routeTo(h);
+    if (location.hash === h) App.render(); else location.hash = h;
+  };
+  window.addEventListener('hashchange', () => { if (App.useHash) routeTo(location.hash); });
+  // 페이지 안 이동: #/로 시작하는 링크를 가로챈다
+  document.addEventListener('click', e => {
+    if (App.useHash || e.defaultPrevented) return;
+    const a = e.target.closest('a[href^="#/"]');
+    if (!a || a.closest('[data-act]') && a.dataset.act) return;
+    e.preventDefault();
+    App.go(a.getAttribute('href'));
+  }, true);
 
   // ---------- 이벤트 위임 ----------
   document.addEventListener('click', e => {
@@ -3264,7 +3292,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     App.modal('진행 방식', `<div class="grid">${opts.map(o => `<button class="btn" style="justify-content:flex-start;padding:12px;flex-wrap:wrap;gap:8px" data-act="cont" data-mode="${o[0]}"><b>${o[1]}</b><span class="muted small">${o[2]}</span></button>`).join('')}</div>
       <div class="row" style="margin-top:12px"><a class="lnk small" href="#/settings" data-act="closeModalGo">⚙️ 자동 진행(턴 끄기) 설정</a></div>`);
   };
-  App.acts.closeModalGo = el => { App.closeModal(); location.hash = el.getAttribute('href'); };
+  App.acts.closeModalGo = el => { App.closeModal(); App.go(el.getAttribute('href')); };
 
   App.acts.cont = el => App.cont(el.dataset.mode || 'next');
 
@@ -3291,7 +3319,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const skipOff = mode === 'offseason' || mode === 'nextseason';
     // 직접 처리하는 드래프트·재계약
     if (G.phase === 'draft' && !A.draft && !skipOff) {
-      if (location.hash !== '#/draft') { App.go('#/draft'); return; }
+      if (App.route.name !== 'draft') { App.go('#/draft'); return; }
       return App.acts.draftAuto();
     }
     if (G.phase === 'resign' && !A.resign && !skipOff) {
@@ -3960,8 +3988,11 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     App.toast(el.dataset.p === 'fast' ? '지루한 부분을 모두 자동으로 바꿨습니다' : '모든 단계를 직접 하도록 바꿨습니다'); App.autosave(); App.rerender();
   };
   A.saveNow = () => App.save();
-  A.exportSave = () => HM.Store.exportFile(G_());
-  A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; location.hash = '#/title'; App.route = { name: 'title', params: [] }; App.render(); };
+  A.exportSave = async () => {
+    const r = await HM.Store.exportFile(G_());
+    App.toast(r === 'saved' ? '저장 파일을 내보냈습니다' : r === 'declined' ? '내보내기를 취소했습니다' : '이 화면에서는 파일로 내보낼 수 없습니다. 브라우저에서 열어 보세요', 3500);
+  };
+  A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; App.go('#/title'); };
   A.autosave = el => { G_().settings.autosave = el.checked; };
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };
@@ -4327,7 +4358,6 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       `<a class="btn" href="#/game/${g.gid}" data-act="closeModalGo">박스스코어</a><button class="btn pri" data-act="cont" data-mode="next">계속</button>`);
   }
   App.showResult = showResult;
-  A.closeModalGo = el => { App.closeModal(); location.hash = el.getAttribute('href'); };
 
   // ---------- 생중계 ----------
   const SPEEDS = { 1: 1100, 2: 520, 3: 200, 4: 55 };
@@ -4451,7 +4481,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     game.say(-1, el.dataset.to === 'q' ? `— ${game.q <= 4 ? game.q + '쿼터' : '연장'} 시작까지 건너뜀 —` : '— 4쿼터 막판까지 건너뜀 —', 'period');
     if (wasPaused) liveUpdate(); else App.resumeLive();
   };
-  A.liveBox = el => { location.hash = el.getAttribute('href'); };
+  A.liveBox = el => { App.go(el.getAttribute('href')); };
   A.liveDone = () => {
     const lv = App.live; const g = lv.g;
     App.live = null;
@@ -4599,9 +4629,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       await App.save(true);
     } catch (e) { console.error(e); App.busy(false); App.toast('리그를 만들지 못했습니다: ' + e.message, 5000); return; }
     App.busy(false);
-    location.hash = '#/inbox';
-    App.route = { name: 'inbox', params: [] };
-    App.render();
+    App.go('#/inbox');
   };
   A.loadSave = async el => {
     App.busy(true, '불러오는 중…');
@@ -4609,7 +4637,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       const G = await HM.Store.load(el.dataset.id);
       App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
       App.busy(false);
-      location.hash = '#/home'; App.route = { name: 'home', params: [] }; App.render();
+      App.go('#/home');
     } catch (e) { App.busy(false); App.toast('불러오기 실패: ' + e.message, 4000); }
   };
   A.delSave = async el => {
@@ -4625,7 +4653,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         const G = HM.Store.parseImport(r.result);
         App.G = G; App.ui = { sorts: {}, tabs: {} };
         await App.save(true);
-        location.hash = '#/home'; App.route = { name: 'home', params: [] }; App.render();
+        App.go('#/home');
       } catch (e) { App.toast('불러오기 실패: ' + e.message, 4000); }
     };
     r.readAsText(f);
@@ -4645,9 +4673,29 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     return cont(mode);
   };
   window.addEventListener('beforeunload', () => { if (App.G) App.save(true); });
-  location.hash = '#/title';
-  App.route = { name: 'title', params: [] };
-  App.render();
+
+  const hot = globalThis.claude && globalThis.claude.hot;
+  // 페이지가 새 판으로 바뀌어도 하던 게임을 이어 열 수 있게 저장 번호를 남긴다
+  try { if (hot && hot.snapshot) hot.snapshot(() => ({ saveId: App.G ? App.G.saveId : null })); } catch (e) { /* 무시 */ }
+
+  async function start(data) {
+    if (!globalThis.HM_DATA) {
+      document.getElementById('root').innerHTML = '<div class="title"><div class="wrap"><div class="hero"><div class="ball"></div><div><h1>하드우드 매니저</h1><p>실제 NBA 기록을 불러오는 중…</p></div></div></div></div>';
+      try {
+        const r = await fetch('data/nba.json');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        globalThis.HM_DATA = await r.json();
+      } catch (e) {
+        document.getElementById('root').innerHTML = `<div class="title"><div class="wrap"><div class="card"><h2>자료를 불러오지 못했습니다</h2><p class="muted">${HM.U.esc(e.message)} — 페이지를 새로 고쳐 다시 시도하세요.</p></div></div></div>`;
+        return;
+      }
+    }
+    if (data && data.saveId) {
+      try { App.G = await HM.Store.load(data.saveId); App.ui = { sorts: {}, tabs: {} }; return App.go('#/home'); } catch (e) { /* 타이틀로 */ }
+    }
+    App.go('#/title');
+  }
+  if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
 })();
 
 </script>

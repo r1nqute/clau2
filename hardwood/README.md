@@ -19,6 +19,9 @@ python3 -m http.server 8000
 
 한 파일짜리가 필요하면 `node tools/bundle.mjs`로 `dist/hardwood-manager.html`을 만든다. 이 파일은 서버 없이 바로 열어도 돈다.
 
+claude.ai 아티팩트로 올릴 때는 `node tools/artifact.mjs <폴더>`로 페이지(`index.html`)와 따로 불러올 `data/nba.json`을 만든다.
+다른 페이지 안에 들어가 있으면 주소의 `#/화면` 대신 페이지 안에서 화면을 옮기고, 자료는 `data/nba.json`에서 읽는다.
+
 저장은 브라우저(IndexedDB)에 자동으로 된다. 다른 기기로 옮길 때는 **저장·설정 → 파일로 내보내기**, 타이틀 화면의 **저장 파일 불러오기**를 쓴다.
 
 ## 할 수 있는 것

@@ -54,7 +54,6 @@
       `<a class="btn" href="#/game/${g.gid}" data-act="closeModalGo">박스스코어</a><button class="btn pri" data-act="cont" data-mode="next">계속</button>`);
   }
   App.showResult = showResult;
-  A.closeModalGo = el => { App.closeModal(); location.hash = el.getAttribute('href'); };
 
   // ---------- 생중계 ----------
   const SPEEDS = { 1: 1100, 2: 520, 3: 200, 4: 55 };
@@ -178,7 +177,7 @@
     game.say(-1, el.dataset.to === 'q' ? `— ${game.q <= 4 ? game.q + '쿼터' : '연장'} 시작까지 건너뜀 —` : '— 4쿼터 막판까지 건너뜀 —', 'period');
     if (wasPaused) liveUpdate(); else App.resumeLive();
   };
-  A.liveBox = el => { location.hash = el.getAttribute('href'); };
+  A.liveBox = el => { App.go(el.getAttribute('href')); };
   A.liveDone = () => {
     const lv = App.live; const g = lv.g;
     App.live = null;

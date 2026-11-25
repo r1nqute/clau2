@@ -573,8 +573,11 @@
     App.toast(el.dataset.p === 'fast' ? '지루한 부분을 모두 자동으로 바꿨습니다' : '모든 단계를 직접 하도록 바꿨습니다'); App.autosave(); App.rerender();
   };
   A.saveNow = () => App.save();
-  A.exportSave = () => HM.Store.exportFile(G_());
-  A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; location.hash = '#/title'; App.route = { name: 'title', params: [] }; App.render(); };
+  A.exportSave = async () => {
+    const r = await HM.Store.exportFile(G_());
+    App.toast(r === 'saved' ? '저장 파일을 내보냈습니다' : r === 'declined' ? '내보내기를 취소했습니다' : '이 화면에서는 파일로 내보낼 수 없습니다. 브라우저에서 열어 보세요', 3500);
+  };
+  A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; App.go('#/title'); };
   A.autosave = el => { G_().settings.autosave = el.checked; };
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };

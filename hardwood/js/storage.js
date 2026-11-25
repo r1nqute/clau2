@@ -88,14 +88,26 @@
       await tx('data', 'readwrite', s => s.delete(id));
       await tx('meta', 'readwrite', s => s.delete(id));
     },
-    exportFile(G) {
-      const blob = new Blob([JSON.stringify(G)], { type: 'application/json' });
-      const a = document.createElement('a');
+    // 파일로 내보내기. claude.ai 아티팩트 안에서는 downloads 기능으로, 단독 실행이면 일반 내려받기로.
+    // 반환: 'saved' | 'declined' | 'unavailable'
+    async exportFile(G) {
       const t = G.teams[G.userTid];
+      const filename = `hardwood-${t.abbr}-${G.season}-${G.date}.json`;
+      const blob = new Blob([JSON.stringify(G)], { type: 'application/json' });
+      const c = globalThis.claude;
+      if (c && typeof c.use === 'function') {
+        let dl = null;
+        try { dl = await c.use('downloads'); } catch (e) { dl = null; }
+        if (!dl) return 'unavailable';
+        try { await dl.save({ filename, data: blob }); return 'saved'; }
+        catch (e) { return e && e.code === 'declined' ? 'declined' : 'unavailable'; }
+      }
+      const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `hardwood-${t.abbr}-${G.season}-${G.date}.json`;
+      a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      return 'saved';
     },
     parseImport(text) {
       const G = JSON.parse(text);

@@ -107,9 +107,7 @@
       await App.save(true);
     } catch (e) { console.error(e); App.busy(false); App.toast('리그를 만들지 못했습니다: ' + e.message, 5000); return; }
     App.busy(false);
-    location.hash = '#/inbox';
-    App.route = { name: 'inbox', params: [] };
-    App.render();
+    App.go('#/inbox');
   };
   A.loadSave = async el => {
     App.busy(true, '불러오는 중…');
@@ -117,7 +115,7 @@
       const G = await HM.Store.load(el.dataset.id);
       App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
       App.busy(false);
-      location.hash = '#/home'; App.route = { name: 'home', params: [] }; App.render();
+      App.go('#/home');
     } catch (e) { App.busy(false); App.toast('불러오기 실패: ' + e.message, 4000); }
   };
   A.delSave = async el => {
@@ -133,7 +131,7 @@
         const G = HM.Store.parseImport(r.result);
         App.G = G; App.ui = { sorts: {}, tabs: {} };
         await App.save(true);
-        location.hash = '#/home'; App.route = { name: 'home', params: [] }; App.render();
+        App.go('#/home');
       } catch (e) { App.toast('불러오기 실패: ' + e.message, 4000); }
     };
     r.readAsText(f);

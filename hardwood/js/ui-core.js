@@ -171,19 +171,34 @@
     App.keepScroll = false;
   };
   App.rerender = () => { App.keepScroll = true; App.render(); };
-  App.go = h => { if (location.hash === h) App.render(); else location.hash = h; };
-
-  function parseHash() {
-    const h = location.hash.replace(/^#\/?/, '');
+  // 화면 이동: 단독 실행이면 주소의 #/화면, 다른 페이지 안(아티팩트 등)이면 페이지 안에서만 옮긴다
+  let framed = false;
+  try { framed = window.self !== window.top; } catch (e) { framed = true; }
+  App.useHash = !framed;
+  function parseHash(hs) {
+    const h = String(hs ?? location.hash).replace(/^#\/?/, '');
     const [name, ...params] = h.split('/');
     return { name: name || (App.G ? 'home' : 'title'), params: params.map(decodeURIComponent) };
   }
-  window.addEventListener('hashchange', () => {
-    App.route = parseHash();
+  function routeTo(h) {
+    App.route = parseHash(h);
     const side = document.getElementById('side'); if (side) side.classList.remove('open');
-    if (App.live && App.route.name !== 'live' && App.live.timer) { /* 생중계는 뒤에서 멈춤 */ App.pauseLive && App.pauseLive(); }
+    if (App.live && App.route.name !== 'live' && App.live.timer) App.pauseLive && App.pauseLive();
     App.render();
-  });
+  }
+  App.go = h => {
+    if (!App.useHash) return routeTo(h);
+    if (location.hash === h) App.render(); else location.hash = h;
+  };
+  window.addEventListener('hashchange', () => { if (App.useHash) routeTo(location.hash); });
+  // 페이지 안 이동: #/로 시작하는 링크를 가로챈다
+  document.addEventListener('click', e => {
+    if (App.useHash || e.defaultPrevented) return;
+    const a = e.target.closest('a[href^="#/"]');
+    if (!a || a.closest('[data-act]') && a.dataset.act) return;
+    e.preventDefault();
+    App.go(a.getAttribute('href'));
+  }, true);
 
   // ---------- 이벤트 위임 ----------
   document.addEventListener('click', e => {
@@ -250,7 +265,7 @@
     App.modal('진행 방식', `<div class="grid">${opts.map(o => `<button class="btn" style="justify-content:flex-start;padding:12px;flex-wrap:wrap;gap:8px" data-act="cont" data-mode="${o[0]}"><b>${o[1]}</b><span class="muted small">${o[2]}</span></button>`).join('')}</div>
       <div class="row" style="margin-top:12px"><a class="lnk small" href="#/settings" data-act="closeModalGo">⚙️ 자동 진행(턴 끄기) 설정</a></div>`);
   };
-  App.acts.closeModalGo = el => { App.closeModal(); location.hash = el.getAttribute('href'); };
+  App.acts.closeModalGo = el => { App.closeModal(); App.go(el.getAttribute('href')); };
 
   App.acts.cont = el => App.cont(el.dataset.mode || 'next');
 
@@ -277,7 +292,7 @@
     const skipOff = mode === 'offseason' || mode === 'nextseason';
     // 직접 처리하는 드래프트·재계약
     if (G.phase === 'draft' && !A.draft && !skipOff) {
-      if (location.hash !== '#/draft') { App.go('#/draft'); return; }
+      if (App.route.name !== 'draft') { App.go('#/draft'); return; }
       return App.acts.draftAuto();
     }
     if (G.phase === 'resign' && !A.resign && !skipOff) {
