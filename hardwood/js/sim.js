@@ -49,6 +49,32 @@
     return { starters, minutes };
   }
 
+  // 전술이 공격 효율(100포제션당 득점)에 주는 효과. O: 공격 다섯 명, D: 수비 다섯 명(선수 객체)
+  function tacticTermFor(O, D, offTac, defTac) {
+    const avg = (arr, k) => arr.reduce((s, p) => s + p.a[k], 0) / (arr.length || 1);
+    let x = 0;
+    switch (offTac.focus) {
+      case 'in': x += (avg(O, 'ins') - 62) / 40 * 2.0 - 0.3; break;
+      case 'out': x += (avg(O, 'tp') - 62) / 40 * 2.2 - 0.3; break;
+      case 'motion': x += (avg(O, 'pss') - 62) / 40 * 1.8 - 0.3; break;
+      case 'star': {
+        const top = O.reduce((m, p) => p.ovr > m ? p.ovr : m, 0);
+        x += (top - 86) / 8 * 1.2 - 0.3; break;
+      }
+    }
+    switch (defTac.def) {
+      case 'zone': x += (avg(O, 'tp') - 60) / 40 * 2.2 - (avg(D, 'idef') - 60) / 40 * 1.2 - 0.3; break;
+      case 'press': x += (avg(O, 'hdl') - 62) / 40 * 2.0 - (avg(D, 'spd') - 60) / 40 * 1.0 - 0.2; break;
+    }
+    // 리바운드: 공격 가담은 두 번째 기회를 늘리지만(공격 리바운드 능력만큼) 상대 속공을 내준다.
+    // 백코트 우선은 두 번째 기회를 버리는 대신 상대 속공(빠른 팀일수록 큼)을 막는다.
+    if (offTac.reb === 'crash') x += 0.4 + (avg(O, 'orb') - 55) / 45 * 1.5;
+    if (offTac.reb === 'back') x -= 0.6;
+    if (defTac.reb === 'crash') x += 0.9;
+    if (defTac.reb === 'back') x -= 0.4 + (avg(O, 'spd') - 55) / 45 * 0.8;
+    return x;
+  }
+
   function shortName(name) {
     const parts = String(name).split(' ');
     if (parts.length <= 1) return name;
@@ -66,6 +92,8 @@
       this.hca = opt.hca ?? 3;
       this.neutral = !!opt.neutral;
       this.rubber = opt.rubber ?? 0.003;
+      this.autoCoach = opt.autoCoach || [false, false];
+      this.possCount = 0;
       this.T = [this.prepTeam(opt.home, 0), this.prepTeam(opt.away, 1)];
       this.q = 1; this.clock = 720; this.elapsed = 0;
       this.score = [0, 0];
@@ -129,26 +157,7 @@
     tempo(t) { return t.tac.pace === 2 ? 0.92 : t.tac.pace === 0 ? 1.09 : 1; }
 
     tacticTerm(off, def) {
-      const O = off.court, D = def.court;
-      const avg = (arr, k) => arr.reduce((s, r) => s + r.p.a[k], 0) / arr.length;
-      let x = 0;
-      switch (off.tac.focus) {
-        case 'in': x += (avg(O, 'ins') - 62) / 40 * 2.0 - 0.3; break;
-        case 'out': x += (avg(O, 'tp') - 62) / 40 * 2.2 - 0.3; break;
-        case 'motion': x += (avg(O, 'pss') - 62) / 40 * 1.8 - 0.3; break;
-        case 'star': {
-          const top = O.reduce((m, r) => r.p.ovr > m ? r.p.ovr : m, 0);
-          x += (top - 86) / 8 * 1.2 - 0.3; break;
-        }
-      }
-      switch (def.tac.def) {
-        case 'zone': x += (avg(O, 'tp') - 60) / 40 * 2.2 - (avg(D, 'idef') - 60) / 40 * 1.2 - 0.3; break;
-        case 'press': x += (avg(O, 'hdl') - 62) / 40 * 2.0 - (avg(D, 'spd') - 60) / 40 * 1.0 - 0.2; break;
-      }
-      if (off.tac.reb === 'crash') x -= 0.2;
-      if (def.tac.reb === 'crash') x += 0.9;
-      if (def.tac.reb === 'back') x -= 0.7;
-      return x;
+      return tacticTermFor(off.court.map(r => r.p), def.court.map(r => r.p), off.tac, def.tac);
     }
 
     // ---------- 포제션 하나 ----------
@@ -185,7 +194,13 @@
 
     endPoss() {
       this.poss = 1 - this.poss;
+      this.possCount++;
+      const q0 = this.q;
       if (this.clock <= 0.01) this.endPeriod();
+      // 코치에게 맡긴 쪽은 쿼터가 바뀔 때와 12포제션마다 조정한다
+      if (!this.done && HM.Adv && (this.q !== q0 || this.possCount % 12 === 0)) {
+        for (const side of [0, 1]) if (this.autoCoach[side]) HM.Adv.autoAdjust(this, side);
+      }
       if (!this.done) { this.subs(this.T[0]); this.subs(this.T[1]); }
     }
 
@@ -475,6 +490,8 @@
         if (want.length === 5) return this.setCourt(t, want);
       }
       if (t.lockCourt && t.court.every(r => !r.out)) return;
+      // 코치나 감독이 방금 바꾼 다섯 명은 잠시 그대로 둔다
+      if (t.holdUntil && this.elapsed < t.holdUntil && t.court.every(r => !r.out)) return;
       const score = r => {
         const tw = r.target / 4;
         const exp = r.target / 48 * (elapsed / 60);
@@ -553,5 +570,5 @@
     return clamp(6.0 + gmsc / 9 + (s.pm || 0) / 50 - (perMin < 8 ? 0.2 : 0), 3.5, 10);
   }
 
-  HM.Sim = { Game, autoRotation, rating, shortName };
+  HM.Sim = { Game, autoRotation, rating, shortName, tacticTermFor };
 })();

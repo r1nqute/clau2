@@ -103,29 +103,60 @@
     G.tradeLog.push({ date: G.date, season: G.season, o: U.deepCopy(o) });
   }
   // AI가 균형을 맞추려 요구하는 것(사용자 → AI)
-  function balance(G, o, aiTid) {
+  // protect: 사용자 쪽에서 내주지 않을 선수
+  function balance(G, o, aiTid, protect = []) {
     const userTid = aiTid === o.a ? o.b : o.a;
     const userGives = userTid === o.a ? 'ap' : 'bp', userGivesK = userTid === o.a ? 'ak' : 'bk';
     const aiGives = userTid === o.a ? 'bp' : 'ap';
     const n = U.deepCopy(o);
-    for (let i = 0; i < 6; i++) {
+    const cy = capYear(G);
+    const sal = ids => ids.reduce((s, id) => s + (G.players[id].contract?.amt || 0), 0);
+    const slack = F.cap(cy) * 0.001;
+    for (let i = 0; i < 10; i++) {
       const r = aiAccepts(G, n, aiTid);
       if (r.ok) return n;
+      const errs = tradeCheck(G, n);
+      const userOut = sal(n[userGives]), userIn = sal(n[aiGives]);
+      const salErr = name => errs.some(e => e.startsWith(G.teams[name].ko + ':') && e.includes('125%'));
+      // 1) 우리가 캡을 넘어 받는 연봉이 너무 많다: 연봉을 맞출 선수를 더 보낸다
+      if (salErr(userTid)) {
+        const need = (userIn - slack) / 1.25 - userOut;
+        const pool = L.roster(G, userTid).filter(p => !n[userGives].includes(p.pid) && p.contract && !protect.includes(p.pid));
+        const fit = pool.filter(p => p.contract.amt >= need).sort((a, b) => value(G, a, userTid) - value(G, b, userTid))[0];
+        const pick = fit || pool.sort((a, b) => b.contract.amt / (value(G, b, userTid) + 0.5) - a.contract.amt / (value(G, a, userTid) + 0.5))[0];
+        if (!pick) return null;
+        n[userGives].push(pick.pid);
+        continue;
+      }
+      // 2) 상대가 캡을 넘어 받는 연봉이 너무 많다: 상대가 연봉을 더 돌려보낸다
+      if (salErr(aiTid)) {
+        const need = (userOut - slack) / 1.25 - userIn;
+        const pool = L.roster(G, aiTid).filter(p => !n[aiGives].includes(p.pid) && p.contract);
+        const fit = pool.filter(p => p.contract.amt >= need).sort((a, b) => value(G, a, aiTid) - value(G, b, aiTid))[0];
+        const pick = fit || pool.sort((a, b) => b.contract.amt - a.contract.amt)[0];
+        if (!pick) return null;
+        n[aiGives].push(pick.pid);
+        continue;
+      }
+      // 3) 로스터가 넘치면 AI 쪽 보낼 선수(가치 낮은 순)를 더한다
+      if (errs.some(e => e.includes('15명'))) {
+        const over = errs.find(e => e.includes('15명'));
+        const side = over.startsWith(G.teams[aiTid].ko) ? aiTid : userTid;
+        const key = side === aiTid ? aiGives : userGives;
+        const low = L.roster(G, side).filter(p => !n[key].includes(p.pid) && !(side === userTid && protect.includes(p.pid))).sort((a, b) => value(G, a, side) - value(G, b, side))[0];
+        if (!low) return null;
+        n[key].push(low.pid);
+        continue;
+      }
+      // 4) 가치가 모자라면 우리 자산 중 모자란 만큼에 가장 가까운 것을 더한다
       const d = tradeDelta(G, n, aiTid);
       const gap = d.gives * 1.06 + 0.15 - d.gets;
-      // 사용자 자산 중 모자란 만큼에 가장 가까운 것을 더한다
       const assets = [];
-      for (const p of L.roster(G, userTid)) if (!n[userGives].includes(p.pid)) assets.push({ kind: 'p', id: p.pid, v: value(G, p, aiTid) });
+      for (const p of L.roster(G, userTid)) if (!n[userGives].includes(p.pid) && !protect.includes(p.pid)) assets.push({ kind: 'p', id: p.pid, v: value(G, p, aiTid) });
       for (const pk of G.picks) if (pk.tid === userTid && pk.season >= G.season && !n[userGivesK].includes(pk.id)) assets.push({ kind: 'k', id: pk.id, v: pickValue(G, pk, aiTid) });
       const cand = assets.filter(x => x.v >= gap * 0.6).sort((a, b) => a.v - b.v)[0] || assets.sort((a, b) => b.v - a.v)[0];
       if (!cand) return null;
       if (cand.kind === 'p') n[userGives].push(cand.id); else n[userGivesK].push(cand.id);
-      // 로스터가 넘치면 AI 쪽 보낼 선수(가치 낮은 순)를 더한다
-      const errs = tradeCheck(G, n);
-      if (errs.some(e => e.includes('15명'))) {
-        const low = L.roster(G, aiTid).filter(p => !n[aiGives].includes(p.pid)).sort((a, b) => value(G, a, aiTid) - value(G, b, aiTid))[0];
-        if (low) n[aiGives].push(low.pid);
-      }
     }
     return aiAccepts(G, n, aiTid).ok ? n : null;
   }

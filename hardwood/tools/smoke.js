@@ -1,7 +1,7 @@
 // 머리 없이 여러 시즌을 끝까지 돌려 본다. 쓰는 법: node tools/smoke.js [시작 시즌] [팀] [시즌 수] [real|random]
 const path = require('path');
 const root = path.resolve(__dirname, '..');
-for (const f of ['js/util.js', 'js/ratings.js', 'data/nba.js', 'js/finance.js', 'js/sim.js', 'js/league.js', 'js/progression.js', 'js/ai.js', 'js/season.js']) require(path.join(root, f));
+for (const f of ['js/util.js', 'js/ratings.js', 'data/nba.js', 'js/finance.js', 'js/sim.js', 'js/league.js', 'js/progression.js', 'js/ai.js', 'js/advisor.js', 'js/season.js']) require(path.join(root, f));
 const { U, L, P, AI, Season, Fin } = HM;
 const Y = +(process.argv[2] || 2003), team = process.argv[3] || 'CLE', N = +(process.argv[4] || 3), prog = process.argv[5] || 'real';
 let t0 = Date.now();

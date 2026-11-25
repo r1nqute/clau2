@@ -6,6 +6,11 @@
 
   // ---------- 자동 진행(턴 끄기) 설정 ----------
   const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true, watchStop: true };
+  // 매니저 모드 설정
+  function mgrSet(G) {
+    G.settings.mgr = Object.assign({ on: true, live: true, auto: false, report: true }, G.settings.mgr || {});
+    return G.settings.mgr;
+  }
   function autoSet(G) {
     G.settings.auto = Object.assign({}, AUTO_DEFAULT, G.settings.auto || {});
     return G.settings.auto;
@@ -249,7 +254,10 @@
   function hcaFor(y) { return y <= 1990 ? 3.6 : y <= 2010 ? 3.1 : 2.4; }
   function makeGame(G, g, live) {
     const po = g.type === 'po';
-    return new Sim.Game({ home: gameTeam(G, g.h, po), away: gameTeam(G, g.a, po), env: L.env(G), playoffs: po, live, hca: hcaFor(G.season) });
+    const M = mgrSet(G);
+    const coach = M.on && M.auto;
+    return new Sim.Game({ home: gameTeam(G, g.h, po), away: gameTeam(G, g.a, po), env: L.env(G), playoffs: po, live, hca: hcaFor(G.season),
+      autoCoach: [coach && g.h === G.userTid, coach && g.a === G.userTid] });
   }
 
   const INJ = [
@@ -883,6 +891,11 @@
       if (new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) weeklyMorale(G);
       // 중간 평가
       if (G.date.endsWith('-01-15')) midCheck(G);
+      // 매니저 모드: 월간 코치 보고서
+      const M = mgrSet(G);
+      if (M.on && M.report && G.date.endsWith('-01') && HM.Adv) {
+        try { msg(G, `🧠 코치 보고서 — ${+G.date.slice(5, 7)}월`, HM.Adv.reportHtml(G), { type: 'coach' }); } catch (e) { /* 보고서는 건너뛴다 */ }
+      }
     }
   }
 
@@ -935,6 +948,6 @@
   HM.Season = {
     calendar, genSchedule, setupSeason, standings, gamesBehind, userGameToday, day, makeGame, record, playGameQuick, afterPostseasonGame,
     startDraft, draftPlayer, draftUntilUser, finishDraft, endResign, newSeason, autoSet, autoDraftAll, autoResignUser,
-    watchList, shortlist, matchWatch, watchHits, watchSummary, scanFA, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
+    watchList, shortlist, matchWatch, watchHits, watchSummary, scanFA, mgrSet, seasonLine, msg, news, welcome, roundName, tradeText, bestOf, KEYS, playoffTeams,
   };
 })();
