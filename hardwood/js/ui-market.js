@@ -402,7 +402,7 @@
     </div>
     <div class="card"><h2>계약 현황</h2><div class="tw"><table class="t"><thead><tr><th>선수</th><th class="r">나이</th><th class="c">능력</th>${years.map(y => `<th class="r">${U.seasonLabel(y)}</th>`).join('')}<th></th></tr></thead><tbody>
       ${ps.map(p => `<tr><td>${App.plink(p)} ${p.contract?.rookie ? '<span class="pill">신인</span>' : ''}</td><td class="r">${P.age(p, cy)}</td><td class="c">${App.ovr(p.ovr)}</td>${years.map(y => `<td class="r">${p.contract && p.contract.exp >= y ? U.money(p.contract.amt) : '<span class="faint">-</span>'}</td>`).join('')}<td><button class="btn sm danger" data-act="release" data-pid="${p.pid}">방출</button></td></tr>`).join('')}
-      ${dead.map(d => `<tr><td class="muted">${esc(d.name)} <span class="pill">방출(잔여 연봉)</span></td><td></td><td></td>${years.map(y => `<td class="r muted">${d.exp >= y ? U.money(d.amt) : '-'}</td>`).join('')}<td></td></tr>`).join('')}
+      ${dead.map(d => `<tr><td class="muted">${esc(d.name)} <span class="pill">${d.mode === "stretch" ? "방출(스트레치)" : d.mode === "buyout" ? "방출(바이아웃)" : "방출(잔여 연봉)"}</span></td><td></td><td></td>${years.map(y => `<td class="r muted">${d.exp >= y ? U.money(d.amt) : '-'}</td>`).join('')}<td></td></tr>`).join('')}
       <tr><td><b>합계</b></td><td></td><td></td>${totals.map(v => `<td class="r"><b>${U.money(v)}</b></td>`).join('')}<td></td></tr>
       <tr><td class="muted">샐러리캡</td><td></td><td></td>${years.map(y => `<td class="r muted">${U.money(F.cap(y))}</td>`).join('')}<td></td></tr>
     </tbody></table></div></div>

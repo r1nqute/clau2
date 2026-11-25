@@ -279,15 +279,26 @@
       <div class="card flat" style="padding:6px">${App.rosterTable('squad-' + tab, ps, { tab, po, own: true })}</div>
       <p class="note" style="margin-top:10px">능력치는 FM처럼 1~20으로 보입니다. <b>능력</b>은 100점 만점의 종합치, <b>잠재력</b>은 스카우트가 본 최고 도달치입니다. 실제 커리어 모드에서는 실존 선수가 현실의 성장 곡선을 따라갑니다(약간의 편차 포함).</p>`;
   };
-  A.release = async el => {
+  A.release = el => {
     const G = G_(); const p = G.players[+el.dataset.pid];
-    const remain = p.contract ? (p.contract.exp - AI.capYear(G) + 1) * p.contract.amt : 0;
-    const ok = await App.confirm('선수 방출', `${esc(p.name)} 선수를 방출할까요?${remain > 0 ? `<br>남은 연봉 ${U.money(remain)}은 계약 만료까지 샐러리캡에 남습니다.` : ''}`, '방출');
-    if (!ok) return;
-    AI.release(G, p);
+    const cy = AI.capYear(G);
+    const opts = AI.releaseOptions(G, p);
+    const room = AI.capRoom(G, G.userTid);
+    const amt = p.contract ? p.contract.amt : 0;
+    const rows = opts.map((o, i) => `<label class="opt"><input type="radio" name="relmode" value="${o.mode}" ${i === (opts.length > 1 ? 1 : 0) ? 'checked' : ''}><span><b>${o.label}</b>
+      <span class="small muted">${o.desc || ''}${o.yrs ? `<br>${U.seasonLabel(cy)} 캡에 남는 돈 <b>${U.money(o.now)}</b> · 총 ${U.money(o.total)} · ${o.yrs}년 · 방출 뒤 캡 여유 <b>${U.money(room + amt - o.now)}</b>` : ''}</span></span></label>`).join('');
+    App.modal(`선수 방출: ${esc(p.name)}`, `<div class="small muted" style="margin-bottom:8px">지금 연봉 ${U.money(amt)}${p.contract ? ` · ${U.seasonLabel(p.contract.exp)}까지` : ''} · 지금 캡 여유 ${U.money(room)}</div><div class="grid">${rows}</div>
+      <p class="small muted" style="margin-top:8px">실제 NBA처럼 방출해도 보장된 연봉은 남습니다. 바이아웃이나 스트레치로 올해 부담을 줄일 수 있습니다.</p>`,
+      `<button class="btn" data-act="closeModal">취소</button><button class="btn pri danger" data-act="releaseDo" data-pid="${p.pid}">방출</button>`);
+  };
+  A.releaseDo = el => {
+    const G = G_(); const p = G.players[+el.dataset.pid];
+    const mode = (document.querySelector('input[name="relmode"]:checked') || {}).value || 'waive';
+    App.closeModal();
+    AI.release(G, p, mode);
     if (G.faSeen) G.faSeen[p.pid] = 1;
     Season.news(G, `${p.name}, ${G.teams[G.userTid].ko}에서 방출`, { type: 'fa' });
-    App.toast(`${p.name} 방출`); App.rerender();
+    App.toast(`${p.name} 방출 — 캡 여유 ${U.money(AI.capRoom(G, G.userTid))}`, 3000); App.autosave(); App.rerender();
   };
 
   // ---------- 선수 ----------

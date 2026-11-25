@@ -398,17 +398,38 @@
     while (ps.length > max) { const p = ps.shift(); release(G, p); out.push(p); }
     return out;
   }
-  function release(G, p) {
+  // 방출 방법: waive(그대로) / buyout(선수가 일부 포기) / stretch(나눠 내기, 2012~)
+  function releaseOptions(G, p) {
+    const cy = capYear(G);
+    if (!p.contract || p.contract.exp < cy) return [{ mode: 'waive', label: '방출', now: 0, total: 0, yrs: 0 }];
+    const yrs = p.contract.exp - cy + 1, amt = p.contract.amt, total = amt * yrs;
+    const age = P.age(p, cy);
+    const mv = F.marketValue(p, cy, age);
+    // 나이가 많거나 몸값보다 많이 받는 선수일수록, 다른 팀에서 뛰고 싶어 더 많이 포기한다
+    const give = U.clamp(0.12 + Math.max(0, age - 29) * 0.03 + (amt > mv * 1.2 ? 0.12 : 0) + (p.ovr < 72 ? 0.06 : 0), 0.08, 0.45);
+    const opts = [
+      { mode: 'waive', label: '그냥 방출(웨이브)', now: amt, total, yrs, desc: '남은 연봉 전액이 계약 만료까지 캡에 남습니다.' },
+      { mode: 'buyout', label: `바이아웃 합의 (선수가 ${Math.round(give * 100)}% 포기)`, now: Math.round(amt * (1 - give)), total: Math.round(total * (1 - give)), yrs, give, desc: '남은 연봉 일부를 덜 주고 내보냅니다.' },
+    ];
+    if (cy >= 2012) {
+      const n = yrs * 2 + 1;
+      opts.push({ mode: 'stretch', label: `스트레치 조항 (${n}년에 나눠 냄)`, now: Math.round(total / n), total, yrs: n, desc: '총액은 같지만 해마다 내는 몫이 작아져 올해 캡 여유가 커집니다.' });
+    }
+    return opts;
+  }
+  function release(G, p, mode = 'waive') {
     const cy = capYear(G);
     if (p.contract && p.contract.exp >= cy && p.tid >= 0) {
-      G.dead.push({ tid: p.tid, amt: p.contract.amt, exp: p.contract.exp, name: p.name });
+      const o = releaseOptions(G, p).find(x => x.mode === mode) || releaseOptions(G, p)[0];
+      const per = o.yrs ? Math.round(o.total / o.yrs) : 0;
+      if (per > 0) G.dead.push({ tid: p.tid, amt: per, exp: cy + o.yrs - 1, name: p.name, mode });
     }
     p.lastTid = p.tid; p.tid = -1; p.contract = null; p.faDays = 0;
   }
 
   HM.AI = {
     value, pickValue, projectedPick, tradeCheck, tradeDelta, aiAccepts, execTrade, balance, aiTrade, aiOfferToUser,
-    reserved, asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
+    reserved, releaseOptions, asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
     draftScore, aiDraftPick, aiTactics, setStrategies, fillRoster, trimRoster, release,
   };
 })();

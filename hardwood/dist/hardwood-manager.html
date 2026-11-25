@@ -2078,17 +2078,38 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     while (ps.length > max) { const p = ps.shift(); release(G, p); out.push(p); }
     return out;
   }
-  function release(G, p) {
+  // 방출 방법: waive(그대로) / buyout(선수가 일부 포기) / stretch(나눠 내기, 2012~)
+  function releaseOptions(G, p) {
+    const cy = capYear(G);
+    if (!p.contract || p.contract.exp < cy) return [{ mode: 'waive', label: '방출', now: 0, total: 0, yrs: 0 }];
+    const yrs = p.contract.exp - cy + 1, amt = p.contract.amt, total = amt * yrs;
+    const age = P.age(p, cy);
+    const mv = F.marketValue(p, cy, age);
+    // 나이가 많거나 몸값보다 많이 받는 선수일수록, 다른 팀에서 뛰고 싶어 더 많이 포기한다
+    const give = U.clamp(0.12 + Math.max(0, age - 29) * 0.03 + (amt > mv * 1.2 ? 0.12 : 0) + (p.ovr < 72 ? 0.06 : 0), 0.08, 0.45);
+    const opts = [
+      { mode: 'waive', label: '그냥 방출(웨이브)', now: amt, total, yrs, desc: '남은 연봉 전액이 계약 만료까지 캡에 남습니다.' },
+      { mode: 'buyout', label: `바이아웃 합의 (선수가 ${Math.round(give * 100)}% 포기)`, now: Math.round(amt * (1 - give)), total: Math.round(total * (1 - give)), yrs, give, desc: '남은 연봉 일부를 덜 주고 내보냅니다.' },
+    ];
+    if (cy >= 2012) {
+      const n = yrs * 2 + 1;
+      opts.push({ mode: 'stretch', label: `스트레치 조항 (${n}년에 나눠 냄)`, now: Math.round(total / n), total, yrs: n, desc: '총액은 같지만 해마다 내는 몫이 작아져 올해 캡 여유가 커집니다.' });
+    }
+    return opts;
+  }
+  function release(G, p, mode = 'waive') {
     const cy = capYear(G);
     if (p.contract && p.contract.exp >= cy && p.tid >= 0) {
-      G.dead.push({ tid: p.tid, amt: p.contract.amt, exp: p.contract.exp, name: p.name });
+      const o = releaseOptions(G, p).find(x => x.mode === mode) || releaseOptions(G, p)[0];
+      const per = o.yrs ? Math.round(o.total / o.yrs) : 0;
+      if (per > 0) G.dead.push({ tid: p.tid, amt: per, exp: cy + o.yrs - 1, name: p.name, mode });
     }
     p.lastTid = p.tid; p.tid = -1; p.contract = null; p.faDays = 0;
   }
 
   HM.AI = {
     value, pickValue, projectedPick, tradeCheck, tradeDelta, aiAccepts, execTrade, balance, aiTrade, aiOfferToUser,
-    reserved, asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
+    reserved, releaseOptions, asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
     draftScore, aiDraftPick, aiTactics, setStrategies, fillRoster, trimRoster, release,
   };
 })();
@@ -4426,15 +4447,26 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       <div class="card flat" style="padding:6px">${App.rosterTable('squad-' + tab, ps, { tab, po, own: true })}</div>
       <p class="note" style="margin-top:10px">능력치는 FM처럼 1~20으로 보입니다. <b>능력</b>은 100점 만점의 종합치, <b>잠재력</b>은 스카우트가 본 최고 도달치입니다. 실제 커리어 모드에서는 실존 선수가 현실의 성장 곡선을 따라갑니다(약간의 편차 포함).</p>`;
   };
-  A.release = async el => {
+  A.release = el => {
     const G = G_(); const p = G.players[+el.dataset.pid];
-    const remain = p.contract ? (p.contract.exp - AI.capYear(G) + 1) * p.contract.amt : 0;
-    const ok = await App.confirm('선수 방출', `${esc(p.name)} 선수를 방출할까요?${remain > 0 ? `<br>남은 연봉 ${U.money(remain)}은 계약 만료까지 샐러리캡에 남습니다.` : ''}`, '방출');
-    if (!ok) return;
-    AI.release(G, p);
+    const cy = AI.capYear(G);
+    const opts = AI.releaseOptions(G, p);
+    const room = AI.capRoom(G, G.userTid);
+    const amt = p.contract ? p.contract.amt : 0;
+    const rows = opts.map((o, i) => `<label class="opt"><input type="radio" name="relmode" value="${o.mode}" ${i === (opts.length > 1 ? 1 : 0) ? 'checked' : ''}><span><b>${o.label}</b>
+      <span class="small muted">${o.desc || ''}${o.yrs ? `<br>${U.seasonLabel(cy)} 캡에 남는 돈 <b>${U.money(o.now)}</b> · 총 ${U.money(o.total)} · ${o.yrs}년 · 방출 뒤 캡 여유 <b>${U.money(room + amt - o.now)}</b>` : ''}</span></span></label>`).join('');
+    App.modal(`선수 방출: ${esc(p.name)}`, `<div class="small muted" style="margin-bottom:8px">지금 연봉 ${U.money(amt)}${p.contract ? ` · ${U.seasonLabel(p.contract.exp)}까지` : ''} · 지금 캡 여유 ${U.money(room)}</div><div class="grid">${rows}</div>
+      <p class="small muted" style="margin-top:8px">실제 NBA처럼 방출해도 보장된 연봉은 남습니다. 바이아웃이나 스트레치로 올해 부담을 줄일 수 있습니다.</p>`,
+      `<button class="btn" data-act="closeModal">취소</button><button class="btn pri danger" data-act="releaseDo" data-pid="${p.pid}">방출</button>`);
+  };
+  A.releaseDo = el => {
+    const G = G_(); const p = G.players[+el.dataset.pid];
+    const mode = (document.querySelector('input[name="relmode"]:checked') || {}).value || 'waive';
+    App.closeModal();
+    AI.release(G, p, mode);
     if (G.faSeen) G.faSeen[p.pid] = 1;
     Season.news(G, `${p.name}, ${G.teams[G.userTid].ko}에서 방출`, { type: 'fa' });
-    App.toast(`${p.name} 방출`); App.rerender();
+    App.toast(`${p.name} 방출 — 캡 여유 ${U.money(AI.capRoom(G, G.userTid))}`, 3000); App.autosave(); App.rerender();
   };
 
   // ---------- 선수 ----------
@@ -5247,7 +5279,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     </div>
     <div class="card"><h2>계약 현황</h2><div class="tw"><table class="t"><thead><tr><th>선수</th><th class="r">나이</th><th class="c">능력</th>${years.map(y => `<th class="r">${U.seasonLabel(y)}</th>`).join('')}<th></th></tr></thead><tbody>
       ${ps.map(p => `<tr><td>${App.plink(p)} ${p.contract?.rookie ? '<span class="pill">신인</span>' : ''}</td><td class="r">${P.age(p, cy)}</td><td class="c">${App.ovr(p.ovr)}</td>${years.map(y => `<td class="r">${p.contract && p.contract.exp >= y ? U.money(p.contract.amt) : '<span class="faint">-</span>'}</td>`).join('')}<td><button class="btn sm danger" data-act="release" data-pid="${p.pid}">방출</button></td></tr>`).join('')}
-      ${dead.map(d => `<tr><td class="muted">${esc(d.name)} <span class="pill">방출(잔여 연봉)</span></td><td></td><td></td>${years.map(y => `<td class="r muted">${d.exp >= y ? U.money(d.amt) : '-'}</td>`).join('')}<td></td></tr>`).join('')}
+      ${dead.map(d => `<tr><td class="muted">${esc(d.name)} <span class="pill">${d.mode === "stretch" ? "방출(스트레치)" : d.mode === "buyout" ? "방출(바이아웃)" : "방출(잔여 연봉)"}</span></td><td></td><td></td>${years.map(y => `<td class="r muted">${d.exp >= y ? U.money(d.amt) : '-'}</td>`).join('')}<td></td></tr>`).join('')}
       <tr><td><b>합계</b></td><td></td><td></td>${totals.map(v => `<td class="r"><b>${U.money(v)}</b></td>`).join('')}<td></td></tr>
       <tr><td class="muted">샐러리캡</td><td></td><td></td>${years.map(y => `<td class="r muted">${U.money(F.cap(y))}</td>`).join('')}<td></td></tr>
     </tbody></table></div></div>
