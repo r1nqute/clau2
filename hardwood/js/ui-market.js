@@ -256,14 +256,15 @@
       if (focus && focus.pids && focus.pids.length) {
         const rows = focus.pids.map(id => G.players[id]).filter(Boolean).map(p => {
           const ask = p.tid === -1 ? AI.asking(G, p) : null;
-          const where = p.tid === -1 ? '<span class="pill good">시장에 있음</span>'
+          const left = p.reserveUntil && G.date <= p.reserveUntil ? U.dayDiff(G.date, p.reserveUntil) + 1 : 0;
+          const where = p.tid === -1 ? `<span class="pill good">시장에 있음</span>${left ? ` <span class="pill warn">우선 협상 ${left}일 남음</span>` : ''}`
             : p.tid >= 0 ? `<span class="pill bad">이미 계약</span> ${App.tchip(G.teams[p.tid])} ${esc(G.teams[p.tid].ko)}${p.signedDate ? ` <span class="faint small">(${U.fmtDateShort(p.signedDate)})</span>` : ''}`
               : p.tid === -3 ? '<span class="pill">은퇴</span>' : '<span class="pill">시장 밖</span>';
           return `<tr><td>${App.plink(p)}</td><td class="c">${p.pos}</td><td class="r">${P.age(p, cy)}</td><td class="c">${App.ovr(p.ovr)}</td><td class="c">${App.stars(P.potShown(p, G))}</td><td>${where}</td><td class="r">${ask ? `${U.money(ask.amt)}×${ask.yrs}년` : '-'}</td><td>${p.tid === -1 ? `<button class="btn sm pri" data-act="negotiate" data-pid="${p.pid}">협상</button>` : ''}</td></tr>`;
         }).join('');
         pinned = `<div class="card" style="margin-bottom:12px;border-color:var(--warn)"><h2>🔔 알림 받은 선수 <span class="r"><button class="btn sm" data-act="faFocusClear">닫기</button></span></h2>
           <div class="tw"><table class="t"><thead><tr><th>선수</th><th class="c">포지션</th><th class="r">나이</th><th class="c">능력</th><th class="c">잠재력</th><th>지금 상태</th><th class="r">요구</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-          <p class="small muted" style="margin-top:6px">다른 팀도 매일 FA와 계약합니다. 알림이 오면 바로 협상하세요.</p></div>`;
+          <p class="small muted" style="margin-top:6px">알림 받은 선수는 5일 동안 다른 팀이 데려가지 못합니다(우선 협상 기간). 그 뒤에는 다른 팀도 계약할 수 있습니다.</p></div>`;
       }
       const notice = (hasFilter() || watchOnly) && hidden ? `<div class="note" style="margin-bottom:8px">거르기${watchOnly ? '(🔔 알림 대상만)' : ''} 때문에 ${hidden}명이 숨겨져 있습니다. <a class="lnk" data-act="faShowAll">모두 보기</a></div>` : '';
       body = pinned + filterBar() + `<div class="row" style="margin-bottom:8px"><label class="row small" style="gap:6px"><input type="checkbox" id="faWatchOnly" ${watchOnly ? 'checked' : ''} data-change="faWatchOnly"> 🔔 알림 조건·★ 관심 선수에 맞는 선수만</label></div>${notice}<div class="card flat" style="padding:6px">${App.table('fa', base.concat(attrCol, [

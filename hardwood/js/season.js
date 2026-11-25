@@ -31,6 +31,15 @@
     if (w.maxAsk && AI.asking(G, p).amt > w.maxAsk * 1000) return false;
     return true;
   }
+  // 지금 우리가 계약할 수 있는 형편인지
+  function signNote(G) {
+    const n = L.roster(G, G.userTid).length, cy = AI.capYear(G), room = AI.capRoom(G, G.userTid);
+    const parts = [];
+    if (n >= 15) parts.push('⚠️ 로스터가 꽉 찼습니다(15명) — 계약하려면 먼저 한 명을 방출하거나 트레이드하세요.');
+    if (room <= 0) parts.push(`⚠️ 샐러리캡 여유가 없습니다 — ${cy >= 1999 && !G.teams[G.userTid].mleUsed ? `미드레벨 예외(${U.money(F.mle(cy))}) 이하나 ` : ''}최저 연봉(${U.money(F.minSal(cy))})으로만 제안할 수 있습니다.`);
+    else parts.push(`캡 여유 ${U.money(room)}`);
+    return `<div class="small muted">${parts.join('<br>')}</div>`;
+  }
   // 이 선수가 걸리는 알림(조건 이름들)
   function watchHits(G, p) {
     const why = [];
@@ -49,6 +58,7 @@
     return parts.join(' · ');
   }
   // 시장에 새로 나온 선수 중 알림 대상을 찾아 받은 편지함으로 알린다
+  const RESERVE_DAYS = 5;
   function scanFA(G) {
     const fas = L.fas(G);
     if (!G.faSeen) { G.faSeen = {}; for (const p of fas) G.faSeen[p.pid] = 1; return []; }
@@ -57,7 +67,7 @@
       now[p.pid] = 1;
       if (G.faSeen[p.pid] || p.lastTid === G.userTid) continue;
       const why = watchHits(G, p);
-      if (why.length) hits.push({ p, why });
+      if (why.length) { hits.push({ p, why }); p.reserveUntil = U.addDays(G.date, RESERVE_DAYS); }
     }
     G.faSeen = now;
     if (!hits.length) return hits;
@@ -70,7 +80,7 @@
     }).join('');
     const first = hits[0].p;
     msg(G, `🔔 관심 FA 등장: ${first.name}${hits.length > 1 ? ` 외 ${hits.length - 1}명` : ''}`,
-      `알림 조건에 맞는 선수가 자유계약 시장에 나왔습니다.<ul>${li}</ul>`, { type: 'scout', pids: hits.map(h => h.p.pid) });
+      `알림 조건에 맞는 선수가 자유계약 시장에 나왔습니다. <b>${U.fmtDateShort(U.addDays(G.date, RESERVE_DAYS))}까지 ${RESERVE_DAYS}일 동안 우선 협상 기간</b>이라 다른 팀이 데려가지 못합니다.<ul>${li}</ul>${signNote(G)}`, { type: 'scout', pids: hits.map(h => h.p.pid) });
     return hits;
   }
 
@@ -874,7 +884,7 @@
         const ps = L.roster(G, t.tid);
         const healthy = ps.filter(p => !(p.injury && p.injury.days > 0)).length;
         if (healthy < 10 && ps.length < 15) {
-          const fa = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
+          const fa = L.fas(G).filter(x => !AI.reserved(G, x)).sort((a, b) => b.ovr - a.ovr)[0];
           if (fa) { fa.tid = t.tid; fa.contract = { amt: F.minSal(G.season), exp: G.season }; fa.signedDate = G.date; }
         }
       }

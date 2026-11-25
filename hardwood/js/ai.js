@@ -257,6 +257,8 @@
     if (!t.mleUsed && amt <= F.mle(cy) && payroll(G, tid) + amt <= F.taxLine(cy) * 1.05) return 'mle';
     return false;
   }
+  // 관심 FA 알림을 받은 선수는 며칠 동안 AI가 데려가지 않는다(사용자 우선 협상)
+  const reserved = (G, p) => !!(p.reserveUntil && G.date <= p.reserveUntil);
   function sign(G, p, tid, amt, yrs) {
     const cy = capYear(G);
     const how = canSign(G, tid, amt, p.lastTid === tid || p.tid === tid);
@@ -274,6 +276,7 @@
     const depthOf = {};
     for (const t of G.teams) depthOf[t.tid] = L.roster(G, t.tid).sort((a, b) => b.ovr - a.ovr);
     for (const p of fas) {
+      if (reserved(G, p)) continue; // 사용자 우선 협상 기간
       if (p.tid !== -1) continue;
       if (Math.random() > 0.45 * intensity + (p.faDays > 14 ? 0.2 : 0)) continue;
       const ask = asking(G, p);
@@ -306,7 +309,7 @@
     for (const t of G.teams) {
       if (t.tid === G.userTid && !includeUser) continue;
       if (L.roster(G, t.tid).length < 13 && Math.random() < 0.5 * intensity) {
-        const p = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
+        const p = L.fas(G).filter(x => !reserved(G, x)).sort((a, b) => b.ovr - a.ovr)[0];
         if (p) { sign(G, p, t.tid, Math.max(F.minSal(cy), Math.min(asking(G, p).amt, F.minSal(cy) * 2)), 1); signed.push({ p, t, amt: p.contract.amt }); }
       }
     }
@@ -380,7 +383,7 @@
     const cy = capYear(G);
     const out = [];
     while (L.roster(G, tid).length < min) {
-      const fa = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
+      const fa = L.fas(G).filter(x => !reserved(G, x)).sort((a, b) => b.ovr - a.ovr)[0];
       if (!fa) {
         const p = L.genPlayer(G, { ovr: 62 + Math.random() * 5, pa: 66, age: 23 + Math.random() * 6, tid });
         G.players[p.pid] = p; p.contract = { amt: F.minSal(cy), exp: cy }; out.push(p); continue;
@@ -405,7 +408,7 @@
 
   HM.AI = {
     value, pickValue, projectedPick, tradeCheck, tradeDelta, aiAccepts, execTrade, balance, aiTrade, aiOfferToUser,
-    asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
+    reserved, asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
     draftScore, aiDraftPick, aiTactics, setStrategies, fillRoster, trimRoster, release,
   };
 })();

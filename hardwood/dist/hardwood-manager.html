@@ -1937,6 +1937,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     if (!t.mleUsed && amt <= F.mle(cy) && payroll(G, tid) + amt <= F.taxLine(cy) * 1.05) return 'mle';
     return false;
   }
+  // 관심 FA 알림을 받은 선수는 며칠 동안 AI가 데려가지 않는다(사용자 우선 협상)
+  const reserved = (G, p) => !!(p.reserveUntil && G.date <= p.reserveUntil);
   function sign(G, p, tid, amt, yrs) {
     const cy = capYear(G);
     const how = canSign(G, tid, amt, p.lastTid === tid || p.tid === tid);
@@ -1954,6 +1956,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const depthOf = {};
     for (const t of G.teams) depthOf[t.tid] = L.roster(G, t.tid).sort((a, b) => b.ovr - a.ovr);
     for (const p of fas) {
+      if (reserved(G, p)) continue; // 사용자 우선 협상 기간
       if (p.tid !== -1) continue;
       if (Math.random() > 0.45 * intensity + (p.faDays > 14 ? 0.2 : 0)) continue;
       const ask = asking(G, p);
@@ -1986,7 +1989,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     for (const t of G.teams) {
       if (t.tid === G.userTid && !includeUser) continue;
       if (L.roster(G, t.tid).length < 13 && Math.random() < 0.5 * intensity) {
-        const p = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
+        const p = L.fas(G).filter(x => !reserved(G, x)).sort((a, b) => b.ovr - a.ovr)[0];
         if (p) { sign(G, p, t.tid, Math.max(F.minSal(cy), Math.min(asking(G, p).amt, F.minSal(cy) * 2)), 1); signed.push({ p, t, amt: p.contract.amt }); }
       }
     }
@@ -2060,7 +2063,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const cy = capYear(G);
     const out = [];
     while (L.roster(G, tid).length < min) {
-      const fa = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
+      const fa = L.fas(G).filter(x => !reserved(G, x)).sort((a, b) => b.ovr - a.ovr)[0];
       if (!fa) {
         const p = L.genPlayer(G, { ovr: 62 + Math.random() * 5, pa: 66, age: 23 + Math.random() * 6, tid });
         G.players[p.pid] = p; p.contract = { amt: F.minSal(cy), exp: cy }; out.push(p); continue;
@@ -2085,7 +2088,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
   HM.AI = {
     value, pickValue, projectedPick, tradeCheck, tradeDelta, aiAccepts, execTrade, balance, aiTrade, aiOfferToUser,
-    asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
+    reserved, asking, offerScore, teamAppeal, canSign, sign, faDay, aiResign, resignTeam, capRoom, capYear, payroll,
     draftScore, aiDraftPick, aiTactics, setStrategies, fillRoster, trimRoster, release,
   };
 })();
@@ -2508,6 +2511,15 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     if (w.maxAsk && AI.asking(G, p).amt > w.maxAsk * 1000) return false;
     return true;
   }
+  // 지금 우리가 계약할 수 있는 형편인지
+  function signNote(G) {
+    const n = L.roster(G, G.userTid).length, cy = AI.capYear(G), room = AI.capRoom(G, G.userTid);
+    const parts = [];
+    if (n >= 15) parts.push('⚠️ 로스터가 꽉 찼습니다(15명) — 계약하려면 먼저 한 명을 방출하거나 트레이드하세요.');
+    if (room <= 0) parts.push(`⚠️ 샐러리캡 여유가 없습니다 — ${cy >= 1999 && !G.teams[G.userTid].mleUsed ? `미드레벨 예외(${U.money(F.mle(cy))}) 이하나 ` : ''}최저 연봉(${U.money(F.minSal(cy))})으로만 제안할 수 있습니다.`);
+    else parts.push(`캡 여유 ${U.money(room)}`);
+    return `<div class="small muted">${parts.join('<br>')}</div>`;
+  }
   // 이 선수가 걸리는 알림(조건 이름들)
   function watchHits(G, p) {
     const why = [];
@@ -2526,6 +2538,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     return parts.join(' · ');
   }
   // 시장에 새로 나온 선수 중 알림 대상을 찾아 받은 편지함으로 알린다
+  const RESERVE_DAYS = 5;
   function scanFA(G) {
     const fas = L.fas(G);
     if (!G.faSeen) { G.faSeen = {}; for (const p of fas) G.faSeen[p.pid] = 1; return []; }
@@ -2534,7 +2547,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       now[p.pid] = 1;
       if (G.faSeen[p.pid] || p.lastTid === G.userTid) continue;
       const why = watchHits(G, p);
-      if (why.length) hits.push({ p, why });
+      if (why.length) { hits.push({ p, why }); p.reserveUntil = U.addDays(G.date, RESERVE_DAYS); }
     }
     G.faSeen = now;
     if (!hits.length) return hits;
@@ -2547,7 +2560,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     }).join('');
     const first = hits[0].p;
     msg(G, `🔔 관심 FA 등장: ${first.name}${hits.length > 1 ? ` 외 ${hits.length - 1}명` : ''}`,
-      `알림 조건에 맞는 선수가 자유계약 시장에 나왔습니다.<ul>${li}</ul>`, { type: 'scout', pids: hits.map(h => h.p.pid) });
+      `알림 조건에 맞는 선수가 자유계약 시장에 나왔습니다. <b>${U.fmtDateShort(U.addDays(G.date, RESERVE_DAYS))}까지 ${RESERVE_DAYS}일 동안 우선 협상 기간</b>이라 다른 팀이 데려가지 못합니다.<ul>${li}</ul>${signNote(G)}`, { type: 'scout', pids: hits.map(h => h.p.pid) });
     return hits;
   }
 
@@ -3351,7 +3364,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         const ps = L.roster(G, t.tid);
         const healthy = ps.filter(p => !(p.injury && p.injury.days > 0)).length;
         if (healthy < 10 && ps.length < 15) {
-          const fa = L.fas(G).sort((a, b) => b.ovr - a.ovr)[0];
+          const fa = L.fas(G).filter(x => !AI.reserved(G, x)).sort((a, b) => b.ovr - a.ovr)[0];
           if (fa) { fa.tid = t.tid; fa.contract = { amt: F.minSal(G.season), exp: G.season }; fa.signedDate = G.date; }
         }
       }
@@ -5088,14 +5101,15 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       if (focus && focus.pids && focus.pids.length) {
         const rows = focus.pids.map(id => G.players[id]).filter(Boolean).map(p => {
           const ask = p.tid === -1 ? AI.asking(G, p) : null;
-          const where = p.tid === -1 ? '<span class="pill good">시장에 있음</span>'
+          const left = p.reserveUntil && G.date <= p.reserveUntil ? U.dayDiff(G.date, p.reserveUntil) + 1 : 0;
+          const where = p.tid === -1 ? `<span class="pill good">시장에 있음</span>${left ? ` <span class="pill warn">우선 협상 ${left}일 남음</span>` : ''}`
             : p.tid >= 0 ? `<span class="pill bad">이미 계약</span> ${App.tchip(G.teams[p.tid])} ${esc(G.teams[p.tid].ko)}${p.signedDate ? ` <span class="faint small">(${U.fmtDateShort(p.signedDate)})</span>` : ''}`
               : p.tid === -3 ? '<span class="pill">은퇴</span>' : '<span class="pill">시장 밖</span>';
           return `<tr><td>${App.plink(p)}</td><td class="c">${p.pos}</td><td class="r">${P.age(p, cy)}</td><td class="c">${App.ovr(p.ovr)}</td><td class="c">${App.stars(P.potShown(p, G))}</td><td>${where}</td><td class="r">${ask ? `${U.money(ask.amt)}×${ask.yrs}년` : '-'}</td><td>${p.tid === -1 ? `<button class="btn sm pri" data-act="negotiate" data-pid="${p.pid}">협상</button>` : ''}</td></tr>`;
         }).join('');
         pinned = `<div class="card" style="margin-bottom:12px;border-color:var(--warn)"><h2>🔔 알림 받은 선수 <span class="r"><button class="btn sm" data-act="faFocusClear">닫기</button></span></h2>
           <div class="tw"><table class="t"><thead><tr><th>선수</th><th class="c">포지션</th><th class="r">나이</th><th class="c">능력</th><th class="c">잠재력</th><th>지금 상태</th><th class="r">요구</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-          <p class="small muted" style="margin-top:6px">다른 팀도 매일 FA와 계약합니다. 알림이 오면 바로 협상하세요.</p></div>`;
+          <p class="small muted" style="margin-top:6px">알림 받은 선수는 5일 동안 다른 팀이 데려가지 못합니다(우선 협상 기간). 그 뒤에는 다른 팀도 계약할 수 있습니다.</p></div>`;
       }
       const notice = (hasFilter() || watchOnly) && hidden ? `<div class="note" style="margin-bottom:8px">거르기${watchOnly ? '(🔔 알림 대상만)' : ''} 때문에 ${hidden}명이 숨겨져 있습니다. <a class="lnk" data-act="faShowAll">모두 보기</a></div>` : '';
       body = pinned + filterBar() + `<div class="row" style="margin-bottom:8px"><label class="row small" style="gap:6px"><input type="checkbox" id="faWatchOnly" ${watchOnly ? 'checked' : ''} data-change="faWatchOnly"> 🔔 알림 조건·★ 관심 선수에 맞는 선수만</label></div>${notice}<div class="card flat" style="padding:6px">${App.table('fa', base.concat(attrCol, [
