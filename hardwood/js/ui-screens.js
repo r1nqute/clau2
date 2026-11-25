@@ -667,6 +667,7 @@
         ${tog('halftime', '생중계 하프타임 정지', '하프타임에 잠깐 멈춥니다.')}
         ${tog('offers', 'AI 트레이드 제안 받기', '끄면 다른 구단이 제안을 보내지 않습니다.')}
         ${tog('minorInjury', '가벼운 부상 알림', '끄면 7일 이상 결장하는 부상만 알립니다.')}
+        <div class="opt" style="display:block"><b>🎟️ 드래프트 우선권</b><div class="row" style="margin-top:6px">${[['round1', '1라운드 1순위'], ['all', '모든 라운드 맨 먼저'], ['off', '끄기(로터리대로)']].map(([v, l]) => `<label class="pill" style="cursor:pointer;padding:5px 10px"><input type="radio" name="auto-draftFirst" value="${v}" ${(A.draftFirst || 'off') === v ? 'checked' : ''} data-change="autoSel" data-k="draftFirst"> ${l}</label>`).join('')}</div><span class="small muted">드래프트 날 우리 팀이 먼저 지명합니다. 지명권이 없으면 하나 받습니다.</span></div>
         ${tog('watchStop', '관심 FA 알림 때 멈추기', '자유계약 화면에서 저장한 조건이나 ★ 관심 선수가 시장에 나오면 진행을 멈춥니다.')}
       </div></div>`;
   };
