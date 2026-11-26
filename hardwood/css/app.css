@@ -310,3 +310,13 @@ svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stro
 .lu-pos { display: flex; flex-direction: column; line-height: 1.2; }
 .lu-pos b { font-size: 16px; }
 @media (max-width: 700px) { .lu-grid { grid-template-columns: 1fr; } .lu-grid .court-wrap { max-width: 340px; width: 100%; margin: 0 auto; } .lu-row { grid-template-columns: 54px minmax(0, 1fr) auto; } .lu-pos .small { display: none; } }
+
+/* 저장 슬롯 */
+.slot-list { display: grid; gap: 6px; }
+.slot-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel2); text-align: left; width: 100%; color: inherit; font: inherit; }
+.slot-row.cur { border-color: var(--accent); }
+.slot-row.slot-pick { cursor: pointer; }
+.slot-row.slot-pick:hover { background: var(--panel3); }
+.slot-no { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--panel3); }
+.slot-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 600px) { .slot-row { flex-wrap: wrap; } .slot-acts { width: 100%; } }

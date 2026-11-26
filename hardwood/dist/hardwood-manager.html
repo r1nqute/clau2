@@ -321,6 +321,16 @@ svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stro
 .lu-pos b { font-size: 16px; }
 @media (max-width: 700px) { .lu-grid { grid-template-columns: 1fr; } .lu-grid .court-wrap { max-width: 340px; width: 100%; margin: 0 auto; } .lu-row { grid-template-columns: 54px minmax(0, 1fr) auto; } .lu-pos .small { display: none; } }
 
+/* 저장 슬롯 */
+.slot-list { display: grid; gap: 6px; }
+.slot-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel2); text-align: left; width: 100%; color: inherit; font: inherit; }
+.slot-row.cur { border-color: var(--accent); }
+.slot-row.slot-pick { cursor: pointer; }
+.slot-row.slot-pick:hover { background: var(--panel3); }
+.slot-no { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--panel3); }
+.slot-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 600px) { .slot-row { flex-wrap: wrap; } .slot-acts { width: 100%; } }
+
 </style>
 </head>
 <body>
@@ -4081,12 +4091,17 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
 </script>
 <script>
-// 저장: IndexedDB(없으면 localStorage). 파일로 내보내기/가져오기.
+// 저장: 슬롯 10개. 이 기기(IndexedDB, 안 되면 localStorage)와 claude.ai 클라우드(아티팩트 개인 DB)에 함께 둔다.
+// 파일로 내보내기/가져오기도 된다.
 (function () {
   const HM = globalThis.HM = globalThis.HM || {};
   const DB = 'hardwood-manager', VER = 1;
+  const SLOTS = 10;
+  const slotId = n => 'slot' + n;
+  const slotOf = id => { const m = /^slot(\d+)$/.exec(String(id || '')); return m ? +m[1] : 0; };
   let dbp = null;
 
+  // ---------- 이 기기 ----------
   function open() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
@@ -4118,7 +4133,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       try {
         const l = LS.list().filter(m => m.id !== meta.id); l.unshift(meta);
         localStorage.setItem('hw-meta', JSON.stringify(l)); localStorage.setItem('hw-data-' + meta.id, data);
-      } catch (e) { throw new Error('저장 공간이 부족합니다. 파일로 내보내기를 이용하세요.'); }
+      } catch (e) { throw new Error('이 기기의 저장 공간이 부족합니다'); }
     },
     get(id) { try { return localStorage.getItem('hw-data-' + id); } catch (e) { return null; } },
     del(id) { try { localStorage.setItem('hw-meta', JSON.stringify(LS.list().filter(m => m.id !== id))); localStorage.removeItem('hw-data-' + id); } catch (e) { /* 무시 */ } },
@@ -4127,10 +4142,11 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
   function metaOf(G) {
     const t = G.teams[G.userTid];
-    return { id: G.saveId, name: `${t.ko} · ${G.manager.name}`, team: t.abbr, colors: t.colors, season: G.season, date: G.date, phase: G.phase, updated: Date.now(), start: G.startYear };
+    return { id: G.saveId, slot: slotOf(G.saveId), name: `${t.ko} · ${G.manager.name}`, team: t.abbr, colors: t.colors, season: G.season, date: G.date, phase: G.phase, updated: Date.now(), start: G.startYear };
   }
 
   const S = {
+    SLOTS, slotId, slotOf,
     async list() {
       if (useLS) return LS.list();
       try {
@@ -4142,7 +4158,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       } catch (e) { useLS = true; return LS.list(); }
     },
     async save(G) {
-      if (!G.saveId) G.saveId = 's' + Date.now().toString(36);
+      if (!G.saveId) G.saveId = slotId(1);
       const meta = metaOf(G);
       const data = JSON.stringify(G);
       if (useLS) { LS.put(meta, data); return meta; }
@@ -4163,13 +4179,15 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
           }));
         } catch (e) { useLS = true; data = LS.get(id); }
       }
-      if (!data) throw new Error('저장 파일을 찾지 못했습니다');
+      if (!data) throw new Error('이 기기에 저장이 없습니다');
       return JSON.parse(data);
     },
     async del(id) {
       if (useLS) return LS.del(id);
-      await tx('data', 'readwrite', s => s.delete(id));
-      await tx('meta', 'readwrite', s => s.delete(id));
+      try {
+        await tx('data', 'readwrite', s => s.delete(id));
+        await tx('meta', 'readwrite', s => s.delete(id));
+      } catch (e) { LS.del(id); }
     },
     // 파일로 내보내기. claude.ai 아티팩트 안에서는 downloads 기능으로, 단독 실행이면 일반 내려받기로.
     // 반환: 'saved' | 'declined' | 'unavailable'
@@ -4195,13 +4213,15 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     parseImport(text) {
       const G = JSON.parse(text);
       if (!G || !G.teams || !G.players || G.userTid === undefined) throw new Error('하드우드 매니저 저장 파일이 아닙니다');
-      G.saveId = 's' + Date.now().toString(36);
+      G.saveId = null;
       return G;
     },
   };
-  // ---------- 클라우드 저장: claude.ai 아티팩트의 개인 DB(data/users/<내 id>/, 나만 읽고 씀) ----------
+
+  // ---------- 클라우드: data/users/<내 id>/<저장 id> (+ chunks/<a|b><번호>) ----------
   // 브라우저 저장소는 앱 안 화면·사생활 보호 모드 등에서 비워질 수 있어서, 같은 게임을 압축해 클라우드에도 둔다.
-  const CHUNK = 200000; // 문서 하나 256KiB 제한 안쪽
+  const CHUNK = 240000; // 문서 하나 256KiB 제한 안쪽
+  const GAP = 70;       // 요청 사이 최소 간격(ms)
   let cloudP = null;
   const C = { state: 'unknown', last: 0, err: '' };
   function cloud() {
@@ -4219,7 +4239,52 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     })();
     return cloudP;
   }
-  async function pack(str) {
+  // 모든 클라우드 요청은 한 줄로 세워 차례로 보낸다. 한도·일시 오류면 기다렸다가 다시 시도한다.
+  let lane = Promise.resolve(), lastCall = 0;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function call(fn) {
+    const run = async () => {
+      for (let k = 0; ; k++) {
+        const gap = GAP - (Date.now() - lastCall); if (gap > 0) await sleep(gap);
+        lastCall = Date.now();
+        try { return await fn(); }
+        catch (e) {
+          const code = e && e.code;
+          if ((code === 'resource_exhausted' || code === 'unavailable') && k < 5) { await sleep(600 * 2 ** k + Math.random() * 400); continue; }
+          throw e;
+        }
+      }
+    };
+    const p = lane.then(run, run);
+    lane = p.catch(() => { });
+    return p;
+  }
+  const errTxt = e => !e ? '알 수 없는 오류'
+    : e.code === 'quota_exceeded' ? '클라우드 저장 공간이 가득 찼습니다. 안 쓰는 슬롯을 지우세요.'
+    : e.code === 'resource_exhausted' ? '요청이 너무 많아 잠시 막혔습니다. 조금 뒤 다시 시도하세요.'
+    : e.code === 'unavailable' ? '클라우드에 잠시 연결할 수 없습니다.'
+    : e.code === 'revoked' || e.code === 'not_granted' ? '이 화면에서는 클라우드를 쓸 수 없습니다.'
+    : (e.message || e.code || String(e));
+  // 클라우드용 압축 형식: 시즌 기록을 배열로, 소수는 셋째 자리까지(압축 크기 약 20% 감소)
+  const SK = ['s', 'tid', 'po', 'gp', 'gs', 'min', 'pts', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'pf', 'pm', 'rat'];
+  const r3 = v => typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 1000) / 1000 : v;
+  const deep = o => Array.isArray(o) ? o.map(deep) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, deep(v)])) : r3(o);
+  function packG(G) {
+    const players = {};
+    for (const [id, p] of Object.entries(G.players)) {
+      const q = deep(p);
+      if (Array.isArray(p.stats)) q.stats = p.stats.map(l => SK.map(k => r3(l[k])));
+      players[id] = q;
+    }
+    return Object.assign({}, G, { players, _pk: 1 });
+  }
+  function unpackG(G) {
+    if (!G._pk) return G;
+    for (const p of Object.values(G.players)) if (Array.isArray(p.stats)) p.stats = p.stats.map(a => Array.isArray(a) ? Object.fromEntries(SK.map((k, i) => [k, a[i]])) : a);
+    delete G._pk;
+    return G;
+  }
+  async function gzip(str) {
     if (typeof CompressionStream === 'undefined') return { enc: 'json', data: str };
     const st = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
     const buf = new Uint8Array(await new Response(st).arrayBuffer());
@@ -4227,7 +4292,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
     return { enc: 'gz64', data: btoa(bin) };
   }
-  async function unpack(enc, data) {
+  async function gunzip(enc, data) {
     if (enc === 'json') return data;
     const bin = atob(data);
     const buf = new Uint8Array(bin.length);
@@ -4235,71 +4300,102 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const st = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
     return new Response(st).text();
   }
-  const errTxt = e => e && e.code === 'quota_exceeded' ? '클라우드 저장 공간이 가득 찼습니다. 타이틀 화면에서 안 쓰는 저장을 지우세요.' : (e && (e.message || e.code)) || String(e);
-  let busy = null, again = null;
+  // 저장 id마다 하나씩만 쓴다. 쓰는 동안 또 부르면 끝난 뒤 가장 최근 상태로 한 번 더.
+  const Q = {};
+  async function writeCloud(c, G) {
+    const meta = metaOf(G);
+    const { enc, data } = await gzip(JSON.stringify(packG(G)));
+    const ref = c.col.doc(meta.id);
+    const prev = await call(() => ref.get());
+    const pm = prev.exists ? prev.data() : {};
+    // 두 벌(a/b)을 번갈아 써서, 쓰다 끊겨도 앞 저장은 온전히 남는다
+    const slot = pm.slot === 'a' ? 'b' : 'a', other = slot === 'a' ? 'b' : 'a';
+    const v = Date.now(), n = Math.max(1, Math.ceil(data.length / CHUNK));
+    const ch = ref.collection('chunks');
+    for (let i = 0; i < n; i++) await call(() => ch.doc(slot + i).set({ v, d: data.slice(i * CHUNK, (i + 1) * CHUNK) }));
+    await call(() => ref.set({ kind: 'save', meta, slot, n, enc, v, ['n_' + slot]: n, ['v_' + slot]: v, ['n_' + other]: pm['n_' + other] || 0, ['v_' + other]: pm['v_' + other] || 0, ['e_' + slot]: enc, ['e_' + other]: pm['e_' + other] || pm.enc || enc }));
+    // 이 벌에 전보다 조각이 줄었으면 남은 조각을 치운다(실패해도 그만)
+    for (let i = n; i < (pm['n_' + slot] || 0); i++) { try { await call(() => ch.doc(slot + i).delete()); } catch (e) { break; } }
+    return true;
+  }
   const Cloud = {
     status: () => C,
     async available() { return !!(await cloud()); },
     async list() {
       const c = await cloud(); if (!c) return [];
-      const snap = await c.col.get();
-      return snap.docs.map(d => d.data()).filter(x => x && x.kind === 'save' && x.meta).map(x => x.meta);
+      const snap = await call(() => c.col.get());
+      return snap.docs.map(d => d.data()).filter(x => x && x.kind === 'save' && x.meta).map(x => Object.assign({}, x.meta, { slot: slotOf(x.meta.id) }));
     },
-    // 한 번에 하나만 쓴다. 쓰는 동안 또 부르면 끝난 뒤 가장 최근 상태로 한 번 더 쓴다.
+    // 반환: true(저장됨) | false(클라우드 없음·실패)
     async save(G) {
-      if (busy) { again = G; return busy; }
-      busy = (async () => {
-        const c = await cloud(); if (!c) return false;
-        try {
-          if (!G.saveId) G.saveId = 's' + Date.now().toString(36);
-          const meta = metaOf(G);
-          const { enc, data } = await pack(JSON.stringify(G));
-          const ref = c.col.doc(meta.id);
-          const prev = await ref.get();
-          const pm = prev.exists ? prev.data() : {};
-          // 두 벌(a/b)을 번갈아 써서, 쓰다 끊겨도 앞 저장은 온전히 남는다
-          const slot = pm.slot === 'a' ? 'b' : 'a', other = slot === 'a' ? 'b' : 'a';
-          const v = Date.now(), n = Math.max(1, Math.ceil(data.length / CHUNK));
-          for (let i = 0; i < n; i++) await ref.collection('chunks').doc(slot + i).set({ v, d: data.slice(i * CHUNK, (i + 1) * CHUNK) });
-          await ref.set({ kind: 'save', meta, slot, n, enc, v, ['n_' + slot]: n, ['n_' + other]: pm['n_' + other] || 0 });
-          C.state = 'on'; C.last = Date.now(); C.err = '';
-          return true;
-        } catch (e) { C.state = 'error'; C.err = errTxt(e); return false; }
+      const c = await cloud(); if (!c || !G || !G.saveId) return false;
+      const id = G.saveId;
+      const q = Q[id] || (Q[id] = { running: null, next: null });
+      if (q.running) { q.next = G; return q.running; }
+      q.running = (async () => {
+        let g = G, ok = false;
+        while (g) {
+          try { ok = await writeCloud(c, g); C.state = 'on'; C.last = Date.now(); C.err = ''; }
+          catch (e) { ok = false; C.state = 'error'; C.err = errTxt(e); }
+          g = q.next; q.next = null;
+        }
+        return ok;
       })();
-      const r = await busy; busy = null;
-      if (again) { const g = again; again = null; return Cloud.save(g); }
-      return r;
+      try { return await q.running; } finally { q.running = null; }
     },
     async load(id) {
-      const c = await cloud(); if (!c) throw new Error('클라우드 저장을 쓸 수 없습니다');
+      const c = await cloud(); if (!c) throw new Error('클라우드를 쓸 수 없습니다');
       const ref = c.col.doc(id);
-      const m = await ref.get();
+      const m = await call(() => ref.get());
       if (!m.exists) throw new Error('클라우드에 저장이 없습니다');
       const x = m.data();
-      const parts = [];
-      for (let i = 0; i < x.n; i++) {
-        const ch = await ref.collection('chunks').doc(x.slot + i).get();
-        const d = ch.exists ? ch.data() : null;
-        if (!d || d.v !== x.v) throw new Error('클라우드 저장이 온전하지 않습니다');
-        parts.push(d.d);
+      const ch = ref.collection('chunks');
+      // 최신 벌이 망가졌으면 바로 앞 벌을 읽는다
+      const tries = [[x.slot, x.n, x.v, x['e_' + x.slot] || x.enc]];
+      const o = x.slot === 'a' ? 'b' : 'a';
+      if (x['n_' + o]) tries.push([o, x['n_' + o], x['v_' + o] || null, x['e_' + o] || x.enc]);
+      let err = null;
+      for (const [sl, n, v, enc] of tries) {
+        try {
+          const parts = []; let v0 = v;
+          for (let i = 0; i < n; i++) {
+            const s = await call(() => ch.doc(sl + i).get());
+            const d = s.exists ? s.data() : null;
+            if (v0 == null && d) v0 = d.v;
+            if (!d || d.v !== v0) throw new Error('클라우드 저장이 손상되었습니다');
+            parts.push(d.d);
+          }
+          const G = unpackG(JSON.parse(await gunzip(enc, parts.join(''))));
+          if (sl !== x.slot) G._cloudOlder = true;
+          return G;
+        } catch (e) { err = e; }
       }
-      return JSON.parse(await unpack(x.enc, parts.join('')));
+      throw err;
     },
+    // 지우기: 목록에서 먼저 없애고(대표 문서), 조각은 남김없이 치운다
     async del(id) {
-      const c = await cloud(); if (!c) return;
-      const ref = c.col.doc(id);
-      const m = await ref.get(); if (!m.exists) return;
-      const x = m.data();
-      for (const sl of ['a', 'b']) for (let i = 0; i < (x['n_' + sl] || 0); i++) await ref.collection('chunks').doc(sl + i).delete();
-      await ref.delete();
+      const c = await cloud(); if (!c) return { ok: true, none: true };
+      const q = Q[id]; if (q) { q.next = null; if (q.running) { try { await q.running; } catch (e) { /* 무시 */ } } }
+      const ref = c.col.doc(id), ch = ref.collection('chunks');
+      try {
+        await call(() => ref.delete());
+      } catch (e) { return { ok: false, err: errTxt(e) }; }
+      let left = 0;
+      try {
+        const snap = await call(() => ch.get());
+        for (const d of snap.docs) { try { await call(() => ch.doc(d.id).delete()); } catch (e) { left++; } }
+      } catch (e) { left = -1; }
+      return { ok: true, left };
     },
   };
   S.cloud = Cloud;
-  // 이 기기와 클라우드의 저장을 합친 목록(같은 게임은 더 최근 것)
+
+  // ---------- 합친 목록과 불러오기·지우기 ----------
+  // 같은 저장 id는 하나로(더 최근 쪽 정보), 어디에 있는지 표시
   S.listAll = async () => {
-    const [loc, cl] = await Promise.all([S.list().catch(() => []), Cloud.list().catch(() => [])]);
+    const [loc, cl] = await Promise.all([S.list().catch(() => []), Cloud.list().catch(e => { C.err = errTxt(e); return []; })]);
     const by = {};
-    for (const m of loc) by[m.id] = Object.assign({}, m, { local: m.updated });
+    for (const m of loc) by[m.id] = Object.assign({}, m, { slot: slotOf(m.id), local: m.updated });
     for (const m of cl) {
       const o = by[m.id];
       if (!o) by[m.id] = Object.assign({}, m, { cloud: m.updated });
@@ -4312,11 +4408,16 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const order = hint && hint.cloud && (!hint.local || hint.cloud > hint.local) ? ['cloud', 'local'] : ['local', 'cloud'];
     let err = null;
     for (const w of order) {
-      try { return w === 'cloud' ? await Cloud.load(id) : await S.load(id); } catch (e) { err = e; }
+      // '이 기기에 없음'보다 클라우드 쪽 이유(손상 등)가 더 쓸모 있다
+      try { return w === 'cloud' ? await Cloud.load(id) : await S.load(id); } catch (e) { if (!err || w === 'cloud') err = e; }
     }
-    throw err || new Error('저장 파일을 찾지 못했습니다');
+    throw err || new Error('저장을 찾지 못했습니다');
   };
-  S.delAll = async id => { await Promise.allSettled([S.del(id), Cloud.del(id)]); };
+  // 반환: { ok, err?, left? } — 클라우드에서 못 지웠으면 ok:false와 이유
+  S.delAll = async id => {
+    await S.del(id).catch(() => { });
+    return Cloud.del(id);
+  };
   HM.Store = S;
 })();
 
@@ -4558,28 +4659,45 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
   // ---------- 저장 ----------
   // 이 기기(브라우저)에 바로 저장하고, 클라우드에는 최대 40초에 한 번 모아서 올린다
+  // 이 기기에는 바로, 클라우드에는 1분에 한 번 모아서(앱을 내리거나 닫을 때·직접 저장할 때는 바로) 올린다
   let cloudTimer = null, lastCloud = 0, dirtyTimer = null;
+  const CLOUD_EVERY = 60000;
+  App.lastSave = { local: 0, localErr: '' };
+  async function cloudRun() {
+    clearTimeout(cloudTimer); cloudTimer = null;
+    const G = App.G; if (!G || !HM.Store.cloud) return false;
+    lastCloud = Date.now();
+    const ok = await HM.Store.cloud.save(G);
+    const st = HM.Store.cloud.status();
+    if (!ok && st.state === 'error' && !App._cloudWarned) { App._cloudWarned = true; App.toast('클라우드 저장 실패: ' + st.err, 5000); }
+    if (ok) App._cloudWarned = false;
+    App.saveStatus();
+    return ok;
+  }
   App.cloudSave = now => {
-    if (!App.G || !HM.Store.cloud) return;
-    clearTimeout(cloudTimer);
-    const run = async () => {
-      cloudTimer = null; lastCloud = Date.now();
-      const ok = await HM.Store.cloud.save(App.G);
-      const st = HM.Store.cloud.status();
-      if (!ok && st.state === 'error' && !App._cloudWarned) { App._cloudWarned = true; App.toast('클라우드 저장 실패: ' + st.err, 5000); }
-      if (ok) App._cloudWarned = false;
-      if (App.route && App.route.name === 'settings' && App.afters.settings) App.afters.settings();
-    };
-    const wait = now ? 0 : Math.max(0, 40000 - (Date.now() - lastCloud));
-    cloudTimer = setTimeout(run, wait);
+    if (!App.G || !HM.Store.cloud) return Promise.resolve(false);
+    if (now) return cloudRun();
+    if (!cloudTimer) cloudTimer = setTimeout(cloudRun, Math.max(0, CLOUD_EVERY - (Date.now() - lastCloud)));
+    return null;
   };
-  App.save = async (quiet) => {
+  // quiet: 알림 없이, cloudNow: 클라우드에도 바로(끝날 때까지 기다림)
+  App.save = async (quiet, cloudNow) => {
+    const G = App.G; if (!G) return false;
     let localOk = true;
-    try { await HM.Store.save(App.G); }
-    catch (e) { localOk = false; if (!(await HM.Store.cloud?.available())) App.toast('저장 실패: ' + e.message, 4000); }
-    App.cloudSave(!quiet);
-    if (!quiet) App.toast(localOk ? '저장했습니다' : '이 기기에는 저장하지 못해 클라우드에 저장합니다', 2500);
+    try { await HM.Store.save(G); App.lastSave = { local: Date.now(), localErr: '' }; }
+    catch (e) { localOk = false; App.lastSave.localErr = e.message; }
+    let cloudOk = null;
+    const hasCloud = HM.Store.cloud ? await HM.Store.cloud.available() : false;
+    if (hasCloud && (cloudNow || !quiet)) cloudOk = await App.cloudSave(true); else if (hasCloud) App.cloudSave(false);
+    if (!localOk && !hasCloud) App.toast('저장 실패: ' + App.lastSave.localErr, 4000);
+    if (!quiet) {
+      const where = [localOk ? '이 기기 ✓' : '이 기기 ✗', hasCloud ? (cloudOk ? '클라우드 ✓' : '클라우드 ✗') : null].filter(Boolean).join(' · ');
+      App.toast(`슬롯 ${HM.Store.slotOf(G.saveId) || '-'}에 저장했습니다 (${where})${hasCloud && !cloudOk ? ' — ' + HM.Store.cloud.status().err : ''}`, hasCloud && !cloudOk ? 5000 : 2500);
+    }
+    App.saveStatus();
+    return localOk || !!cloudOk;
   };
+  App.saveStatus = () => { if (App.route && App.route.name === 'settings' && App.afters.settings) App.afters.settings(); };
   App.autosave = () => { clearTimeout(dirtyTimer); dirtyTimer = null; if (App.G && App.G.settings.autosave !== false) App.save(true); };
   // 단추·선택으로 무언가 바꾸면 잠시 뒤 자동 저장(여러 번 눌러도 한 번)
   App.dirty = () => {
@@ -5401,10 +5519,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const theme = App.themePref();
     return `<h1>저장·설정</h1>
     <div class="grid g2">
-      <div class="card"><h2>저장</h2><p class="small muted">게임은 이 브라우저에 저장됩니다(자동 저장 ${G.settings.autosave !== false ? '켜짐' : '꺼짐'}). 다른 기기로 옮기려면 파일로 내보내세요.</p>
-        <div class="row"><button class="btn pri" data-act="saveNow">지금 저장</button><button class="btn" data-act="exportSave">파일로 내보내기</button><button class="btn" data-act="toTitle">타이틀로</button></div>
-        <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행하거나 무언가 바꿀 때마다 자동 저장</label>
-        <div class="small" id="cloudSt" style="margin-top:8px">☁️ 클라우드 저장 확인 중…</div></div>
+      ${App.saveCardHtml()}
       <div class="card"><h2>화면 테마</h2><div class="grid g3">${[['dark', '🌙 다크 모드'], ['light', '☀️ 밝게'], ['system', '📱 기기 설정 따르기']].map(([v, l]) => `<label class="opt"><input type="radio" name="theme" value="${v}" ${theme === v ? 'checked' : ''} data-change="theme"><span><b>${l}</b></span></label>`).join('')}</div>
         <p class="small muted" style="margin-top:8px">위쪽 막대의 🌙/☀️ 단추로도 바로 바꿀 수 있습니다.</p></div>
       ${App.autoCard()}
@@ -5454,17 +5569,14 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const r = await HM.Store.exportFile(G_());
     App.toast(r === 'saved' ? '저장 파일을 내보냈습니다' : r === 'declined' ? '내보내기를 취소했습니다' : '이 화면에서는 파일로 내보낼 수 없습니다. 브라우저에서 열어 보세요', 3500);
   };
-  A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; App.go('#/title'); };
-  A.autosave = el => { G_().settings.autosave = el.checked; if (el.checked) App.save(true); };
-  App.afters.settings = async () => {
-    const el = document.getElementById('cloudSt'); if (!el) return;
-    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
-    const st = ok ? HM.Store.cloud.status() : null;
-    if (!document.body.contains(el)) return;
-    el.innerHTML = !ok ? '⚠️ 이 화면에서는 클라우드 저장을 쓸 수 없어 이 브라우저에만 저장됩니다. 가끔 "파일로 내보내기"로 백업하세요.'
-      : st.state === 'error' ? `⚠️ 클라우드 저장 실패: ${esc(st.err)} <button class="btn sm" data-act="saveNow">다시 저장</button>`
-      : `☁️ 클라우드 저장 켜짐(내 계정에만 보임)${st.last ? ` · 마지막 ${new Date(st.last).toLocaleTimeString('ko-KR')}` : ' · 곧 첫 저장'}`;
+  A.toTitle = async () => {
+    App.busy(true, '저장하는 중…');
+    await App.save(true, true); // 클라우드까지 올린 뒤 나간다
+    App.busy(false);
+    App.G = null; App.live = null; App._slots = null; App.go('#/title');
   };
+  A.autosave = el => { G_().settings.autosave = el.checked; if (el.checked) App.save(true); };
+  // 저장 상태·슬롯 목록은 ui-saves.js(App.afters.settings)
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };
 
@@ -7148,32 +7260,14 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
             <label class="opt"><input type="radio" name="prog" value="random" ${sel.prog === 'random' ? 'checked' : ''} data-change="newProg"><span><b>무작위 성장</b><span class="small muted">시작 시점부터 역사가 갈라집니다. 잠재력과 나이에 따라 성장이 정해집니다.</span></span></label>
           </div></div>
         </div>
-        <div class="row" style="margin-top:16px"><button class="btn pri" style="padding:12px 22px;font-size:15px" data-act="newStart" ${sel.abbr ? '' : 'disabled'}>${sel.abbr ? `${esc(tsel.ko)} 감독으로 시작` : '팀을 고르세요'}</button>
+        <div class="row" style="margin-top:16px"><span class="small muted">저장 슬롯</span><span id="newSlot"><select disabled><option>슬롯 확인 중…</option></select></span></div>
+        <div class="row" style="margin-top:12px"><button class="btn pri" style="padding:12px 22px;font-size:15px" data-act="newStart" ${sel.abbr ? '' : 'disabled'}>${sel.abbr ? `${esc(tsel.ko)} 감독으로 시작` : '팀을 고르세요'}</button>
           <span class="sp"></span><label class="btn"><input type="file" accept="application/json,.json" style="display:none" data-change="importSave">저장 파일 불러오기</label></div>
       </div>
       <p class="small muted" style="margin-top:14px">선수 능력치는 Basketball-Reference 기록을 바탕으로 계산했습니다. NBA와 관계없는 팬 제작 시뮬레이션입니다.</p>
     </div></div>`;
   };
-  // 이어하기: 이 기기 저장을 먼저 보이고, 클라우드 저장이 도착하면 합친다
-  App.afters.title = async () => {
-    const el = document.getElementById('saves'); if (!el) return;
-    const where = m => m.cloud && m.local ? '<span class="pill good">☁️ 클라우드 · 이 기기</span>' : m.cloud ? '<span class="pill good">☁️ 클라우드</span>' : '<span class="pill">이 기기</span>';
-    const draw = (list, note) => {
-      App._saveList = list;
-      el.innerHTML = list.length || note ? `<div class="card"><h2>이어하기</h2>${list.length ? `<div class="grid">${list.slice(0, 10).map(m => `<div class="row nowrap" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2)">
-      <span class="tbadge" style="${App.tstyle({ colors: m.colors || ['#555555', '#cccccc'] })}">${esc(m.team)}</span>
-      <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div><div style="margin-top:3px">${where(m)}</div></div>
-      <button class="btn pri sm" data-act="loadSave" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div>`).join('')}</div>` : ''}${note ? `<p class="small muted" style="margin:${list.length ? '10px' : '0'} 0 0">${note}</p>` : ''}</div>` : '';
-    };
-    let loc = [];
-    try { loc = (await HM.Store.list()).map(m => Object.assign({}, m, { local: m.updated })); } catch (e) { loc = []; }
-    draw(loc, '☁️ 클라우드 저장을 확인하는 중…');
-    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
-    let all = loc;
-    if (ok) { try { all = await HM.Store.listAll(); } catch (e) { all = loc; } }
-    if (document.getElementById('saves') !== el) return;
-    draw(all, ok ? '☁️ 클라우드 저장이 켜져 있습니다. 진행할 때마다 이 기기와 클라우드(내 계정에만 보임)에 함께 저장됩니다.' : '이 화면에서는 브라우저에만 저장됩니다. 브라우저 데이터가 지워지면 사라지니, 가끔 설정의 "파일로 내보내기"로 백업하세요.');
-  };
+  // 이어하기 목록은 ui-saves.js(App.afters.title)
   A.newYear = el => { App.newSel.year = +el.value; App.newSel.abbr = null; App.render(); };
   A.newTeam = el => { App.newSel.abbr = el.dataset.abbr; App.render(); };
   A.newName = el => { App.newSel.name = el.value; };
@@ -7181,6 +7275,12 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   A.newStart = async () => {
     const sel = App.newSel;
     if (!sel.abbr) return;
+    const sl = App._slots || await App.slots(false);
+    const n = sel.slot || 1;
+    if (sl.by[n]) {
+      const ok = await App.confirm('슬롯 덮어쓰기', `슬롯 ${n}에 있는 저장(${esc(sl.by[n].name)}, ${U.seasonLabel(sl.by[n].season)})을 덮어쓰고 새 게임을 시작할까요?`, '덮어쓰기');
+      if (!ok) return;
+    }
     App.busy(true, '리그를 만드는 중…');
     await App.sleep(30);
     try {
@@ -7188,40 +7288,206 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       Season.setupSeason(G, true);
       Season.welcome(G);
       Season.scanFA(G);
+      G.saveId = HM.Store.slotId(n);
       App.G = G;
       App.ui = { sorts: {}, tabs: {} };
-      await App.save(true);
+      App._slots = null; sel.slotPicked = false;
+      await App.save(true, true);
     } catch (e) { console.error(e); App.busy(false); App.toast('리그를 만들지 못했습니다: ' + e.message, 5000); return; }
     App.busy(false);
     App.go('#/inbox');
   };
-  A.loadSave = async el => {
-    App.busy(true, '불러오는 중…');
-    try {
-      const hint = (App._saveList || []).find(m => m.id === el.dataset.id);
-      const G = await HM.Store.loadBest(el.dataset.id, hint);
-      App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
-      App.busy(false);
-      App.go('#/home');
-    } catch (e) { App.busy(false); App.toast('불러오기 실패: ' + e.message, 4000); }
-  };
-  A.delSave = async el => {
-    const ok = await App.confirm('저장 삭제', '이 저장을 지울까요? 되돌릴 수 없습니다.', '삭제');
-    if (!ok) return;
-    await HM.Store.delAll(el.dataset.id); App.render();
-  };
+  // 불러오기·지우기는 ui-saves.js
   A.importSave = el => {
     const f = el.files && el.files[0]; if (!f) return;
     const r = new FileReader();
     r.onload = async () => {
       try {
         const G = HM.Store.parseImport(r.result);
-        App.G = G; App.ui = { sorts: {}, tabs: {} };
-        await App.save(true);
+        const n = await App.pickSlot('가져온 게임을 둘 슬롯', '파일에서 가져온 게임을 어느 슬롯에 저장할까요?');
+        if (!n) return;
+        G.saveId = HM.Store.slotId(n);
+        App.G = G; App.ui = { sorts: {}, tabs: {} }; App._slots = null;
+        App.busy(true, '저장하는 중…'); await App.save(true, true); App.busy(false);
         App.go('#/home');
       } catch (e) { App.toast('불러오기 실패: ' + e.message, 4000); }
     };
     r.readAsText(f);
+  };
+})();
+
+</script>
+<script>
+// 저장 슬롯 화면: 타이틀의 이어하기, 설정의 슬롯 관리, 슬롯 고르기 창
+(function () {
+  const HM = globalThis.HM;
+  const U = HM.U, App = HM.App, St = HM.Store;
+  const esc = U.esc;
+  const A = App.acts;
+  const N = St.SLOTS;
+
+  // 슬롯 현황: { by: {n: meta}, legacy: [meta], cloud: bool }
+  async function slots(localOnly) {
+    let list = [];
+    const cloud = St.cloud ? await St.cloud.available() : false;
+    try { list = localOnly || !cloud ? (await St.list()).map(m => Object.assign({}, m, { slot: St.slotOf(m.id), local: m.updated })) : await St.listAll(); } catch (e) { list = []; }
+    const by = {}, legacy = [];
+    for (const m of list) { const n = St.slotOf(m.id); if (n >= 1 && n <= N) by[n] = m; else legacy.push(m); }
+    App._slots = { by, legacy, cloud };
+    return App._slots;
+  }
+  App.slots = slots;
+  const firstEmpty = s => { for (let n = 1; n <= N; n++) if (!s.by[n]) return n; return 0; };
+  const where = m => m.cloud && m.local ? '<span class="pill good">☁️ 클라우드 · 이 기기</span>' : m.cloud ? '<span class="pill good">☁️ 클라우드</span>' : '<span class="pill">이 기기</span>';
+  const info = m => `<span class="tbadge" style="${App.tstyle({ colors: m.colors || ['#555555', '#cccccc'] })}">${esc(m.team)}</span>
+    <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div>
+    <div class="small faint">${new Date(m.updated).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 저장 ${where(m)}</div></div>`;
+
+  // ---------- 타이틀: 이어하기 ----------
+  function titleHtml(s, note) {
+    const filled = []; const empty = [];
+    for (let n = 1; n <= N; n++) (s.by[n] ? filled : empty).push(n);
+    const row = (n, m) => `<div class="slot-row"><span class="slot-no">${n}</span>${info(m)}
+      <div class="slot-acts"><button class="btn pri sm" data-act="loadSave" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div></div>`;
+    const leg = s.legacy.map(m => `<div class="slot-row"><span class="slot-no">-</span>${info(m)}
+      <div class="slot-acts"><button class="btn pri sm" data-act="loadSave" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div></div>`).join('');
+    if (!filled.length && !leg && !note) return '';
+    return `<div class="card"><h2>이어하기 <span class="r small muted">저장 슬롯 ${filled.length}/${N}</span></h2>
+      ${filled.length ? `<div class="slot-list">${filled.map(n => row(n, s.by[n])).join('')}</div>` : ''}
+      ${empty.length && filled.length ? `<div class="small muted" style="margin-top:8px">빈 슬롯: ${empty.join(', ')}</div>` : ''}
+      ${leg ? `<h3 style="margin-top:12px">이전 방식 저장</h3><p class="small muted" style="margin:0 0 6px">불러오면 빈 슬롯으로 옮겨집니다.</p><div class="slot-list">${leg}</div>` : ''}
+      ${note ? `<p class="small muted" style="margin:10px 0 0">${note}</p>` : ''}</div>`;
+  }
+  App.afters.title = async () => {
+    const el = document.getElementById('saves'); if (!el) return;
+    const s0 = await slots(true);
+    el.innerHTML = titleHtml(s0, '☁️ 클라우드 저장을 확인하는 중…');
+    App.newSlotRender();
+    const s = await slots(false);
+    if (document.getElementById('saves') !== el) return;
+    const err = St.cloud && St.cloud.status().err;
+    el.innerHTML = titleHtml(s, s.cloud ? (err ? `⚠️ 클라우드 목록을 읽지 못했습니다: ${esc(err)}` : '☁️ 클라우드 저장이 켜져 있습니다. 진행할 때마다 이 기기와 클라우드(내 계정에만 보임)에 함께 저장됩니다.') : '이 화면에서는 브라우저에만 저장됩니다. 브라우저 데이터가 지워지면 사라지니, 가끔 설정의 "파일로 내보내기"로 백업하세요.');
+    App.newSlotRender();
+  };
+  // 새 게임: 저장할 슬롯 고르기
+  App.newSlotRender = () => {
+    const el = document.getElementById('newSlot'); const s = App._slots; if (!el || !s) return;
+    const sel = App.newSel;
+    if (!sel.slot || (s.by[sel.slot] && !sel.slotPicked)) sel.slot = firstEmpty(s) || 1;
+    el.innerHTML = `<select data-change="newSlotSel" aria-label="저장 슬롯">${Array.from({ length: N }, (_, i) => i + 1).map(n => `<option value="${n}" ${n === sel.slot ? 'selected' : ''}>슬롯 ${n} — ${s.by[n] ? `${esc(s.by[n].team)} ${U.seasonLabel(s.by[n].season)} (덮어씀)` : '비어 있음'}</option>`).join('')}</select>`;
+  };
+  A.newSlotSel = el => { App.newSel.slot = +el.value; App.newSel.slotPicked = true; };
+
+  // 불러오기(이전 방식 저장은 빈 슬롯으로 옮긴다)
+  A.loadSave = async el => {
+    const id = el.dataset.id;
+    const s = App._slots || await slots(false);
+    const hint = Object.values(s.by).concat(s.legacy).find(m => m.id === id);
+    App.busy(true, '불러오는 중…');
+    let G;
+    try { G = await St.loadBest(id, hint); }
+    catch (e) { App.busy(false); App.toast('불러오기 실패: ' + e.message, 5000); return; }
+    App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
+    if (G._cloudOlder) { delete G._cloudOlder; App.toast('클라우드의 마지막 저장이 손상되어 바로 앞 저장을 불러왔습니다', 5000); }
+    if (!St.slotOf(G.saveId)) {
+      const n = firstEmpty(s);
+      if (n) {
+        G.saveId = St.slotId(n);
+        App.busy(true, `슬롯 ${n}으로 옮기는 중…`);
+        const ok = await App.save(true, true);
+        if (ok) { const r = await St.delAll(id); App.toast(`이전 저장을 슬롯 ${n}으로 옮겼습니다${r.ok ? '' : ` (이전 클라우드 사본은 남아 있음: ${r.err})`}`, 4000); }
+      } else App.toast('빈 슬롯이 없어 이전 방식 저장으로 계속합니다', 4000);
+    }
+    App.busy(false);
+    App.go('#/home');
+  };
+  // 지우기: 이 기기와 클라우드 모두
+  A.delSave = async el => {
+    const id = el.dataset.id;
+    const s = App._slots || await slots(false);
+    const m = Object.values(s.by).concat(s.legacy).find(x => x.id === id);
+    const n = St.slotOf(id);
+    if (App.G && App.G.saveId === id) { App.toast('지금 하고 있는 게임의 슬롯은 지울 수 없습니다', 3000); return; }
+    const ok = await App.confirm('저장 삭제', `${n ? `슬롯 ${n}` : '이 저장'}${m ? `(${esc(m.name)}, ${U.seasonLabel(m.season)})` : ''}을 이 기기와 클라우드에서 지울까요? 되돌릴 수 없습니다.`, '삭제');
+    if (!ok) return;
+    App.busy(true, '지우는 중…');
+    const r = await St.delAll(id);
+    App.busy(false);
+    App.toast(r.ok ? `${n ? `슬롯 ${n}` : '저장'}을 지웠습니다` : `클라우드에서 지우지 못했습니다: ${r.err} — 다시 시도하세요`, r.ok ? 2500 : 6000);
+    App._slots = null;
+    if (App.route.name === 'settings') App.afters.settings(); else App.render();
+  };
+  // 슬롯 고르기 창(파일 가져오기 등): 고른 번호 또는 null
+  App.pickSlot = (title, note) => new Promise(async res => {
+    const s = await slots(false);
+    App._pickRes = res;
+    App.modal(title, `${note ? `<p class="small muted">${note}</p>` : ''}<div class="slot-list">${Array.from({ length: N }, (_, i) => i + 1).map(n => `<button class="slot-row slot-pick" data-act="pickSlotGo" data-n="${n}"><span class="slot-no">${n}</span>${s.by[n] ? info(s.by[n]) + '<span class="pill warn">덮어씀</span>' : '<div class="muted" style="flex:1">비어 있음</div>'}</button>`).join('')}</div>`,
+      '<button class="btn" data-act="pickSlotCancel">취소</button>');
+  });
+  A.pickSlotGo = async el => {
+    const n = +el.dataset.n; const s = App._slots;
+    if (s && s.by[n]) { App.closeModal(); const ok = await App.confirm('슬롯 덮어쓰기', `슬롯 ${n}의 저장(${esc(s.by[n].name)})을 덮어쓸까요?`, '덮어쓰기'); const r = App._pickRes; App._pickRes = null; if (r) r(ok ? n : null); return; }
+    App.closeModal(); const r = App._pickRes; App._pickRes = null; if (r) r(n);
+  };
+  A.pickSlotCancel = () => { App.closeModal(); const r = App._pickRes; App._pickRes = null; if (r) r(null); };
+
+  // ---------- 설정: 슬롯 관리 ----------
+  App.saveCardHtml = () => `<div class="card span2" id="saveCard"><h2>저장 슬롯 <span class="r"><button class="btn pri sm" data-act="saveNow">지금 저장</button> <button class="btn sm" data-act="exportSave">파일로 내보내기</button> <button class="btn sm" data-act="toTitle">타이틀로</button></span></h2>
+    <div class="small" id="cloudSt">저장 상태 확인 중…</div>
+    <label class="row small" style="margin-top:8px"><input type="checkbox" ${App.G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행하거나 무언가 바꿀 때마다 자동 저장</label>
+    <p class="small muted" style="margin:8px 0">지금 게임은 <b>슬롯 ${St.slotOf(App.G.saveId) || '-'}</b>에 자동 저장됩니다. 다른 슬롯에 저장하면 지금 상태의 복사본이 그 슬롯에 남습니다(트레이드 전 같은 되돌아갈 지점). 그 슬롯을 불러오면 거기서부터 이어서 진행합니다.</p>
+    <div class="slot-list" id="slotList"><div class="small muted">슬롯을 읽는 중…</div></div></div>`;
+  App.afters.settings = async () => {
+    const st = document.getElementById('cloudSt'); const box = document.getElementById('slotList');
+    if (!st && !box) return;
+    const s = await slots(false);
+    const G = App.G; if (!G) return;
+    const cur = St.slotOf(G.saveId);
+    const cs = St.cloud ? St.cloud.status() : { state: 'off' };
+    const t = x => x ? new Date(x).toLocaleTimeString('ko-KR') : '';
+    if (st && document.body.contains(st)) {
+      const local = App.lastSave.localErr ? `⚠️ 이 기기 저장 실패: ${esc(App.lastSave.localErr)}` : `💾 이 기기 저장${App.lastSave.local ? ` · 마지막 ${t(App.lastSave.local)}` : ''}`;
+      const cl = !s.cloud ? '⚠️ 이 화면에서는 클라우드 저장을 쓸 수 없습니다(브라우저에만 저장). 가끔 "파일로 내보내기"로 백업하세요.'
+        : cs.state === 'error' ? `⚠️ 클라우드 저장 실패: ${esc(cs.err)} <button class="btn sm" data-act="saveNow">다시 저장</button>`
+        : `☁️ 클라우드 저장 켜짐(내 계정에만 보임)${cs.last ? ` · 마지막 ${t(cs.last)}` : ' · 곧 첫 저장'}`;
+      st.innerHTML = `${local}<br>${cl}`;
+    }
+    if (box && document.body.contains(box)) {
+      const legacy = s.legacy.filter(m => m.id !== G.saveId);
+      box.innerHTML = Array.from({ length: N }, (_, i) => i + 1).map(n => {
+        const m = s.by[n];
+        const isCur = n === cur;
+        const acts = isCur ? `<span class="pill good">지금 게임</span>`
+          : `<button class="btn sm" data-act="saveCopy" data-n="${n}">${m ? '여기에 덮어 저장' : '여기에 저장'}</button>${m ? `<button class="btn sm" data-act="slotLoad" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button>` : ''}`;
+        return `<div class="slot-row ${isCur ? 'cur' : ''}"><span class="slot-no">${n}</span>${m ? info(m) : '<div class="muted" style="flex:1">비어 있음</div>'}<div class="slot-acts">${acts}</div></div>`;
+      }).join('') + (legacy.length ? `<h3 style="margin-top:10px">이전 방식 저장</h3>` + legacy.map(m => `<div class="slot-row"><span class="slot-no">-</span>${info(m)}<div class="slot-acts"><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div></div>`).join('') : '');
+    }
+  };
+  // 지금 상태의 복사본을 다른 슬롯에
+  A.saveCopy = async el => {
+    const n = +el.dataset.n; const G = App.G; if (!G) return;
+    const s = App._slots || await slots(false);
+    if (s.by[n]) { const ok = await App.confirm('슬롯 덮어쓰기', `슬롯 ${n}의 저장(${esc(s.by[n].name)}, ${U.seasonLabel(s.by[n].season)})을 지금 상태로 덮어쓸까요?`, '덮어쓰기'); if (!ok) return; }
+    App.busy(true, `슬롯 ${n}에 저장하는 중…`);
+    await App.save(true);
+    const copy = JSON.parse(JSON.stringify(G)); copy.saveId = St.slotId(n);
+    let localOk = true; try { await St.save(copy); } catch (e) { localOk = false; }
+    const hasCloud = St.cloud ? await St.cloud.available() : false;
+    const cloudOk = hasCloud ? await St.cloud.save(copy) : null;
+    App.busy(false);
+    App.toast(`슬롯 ${n}에 저장했습니다 (${[localOk ? '이 기기 ✓' : '이 기기 ✗', hasCloud ? (cloudOk ? '클라우드 ✓' : '클라우드 ✗ ' + St.cloud.status().err) : null].filter(Boolean).join(' · ')})`, cloudOk === false ? 5000 : 2500);
+    App.afters.settings();
+  };
+  // 다른 슬롯으로 갈아타기(지금 게임은 먼저 저장)
+  A.slotLoad = async el => {
+    const id = el.dataset.id; const n = St.slotOf(id);
+    const ok = await App.confirm('슬롯 불러오기', `지금 게임을 저장하고 슬롯 ${n}을 불러올까요? 이후 자동 저장은 슬롯 ${n}에 됩니다.`, '불러오기');
+    if (!ok) return;
+    App.busy(true, '저장하는 중…');
+    await App.save(true, true);
+    App.busy(false);
+    App._slots = null;
+    await A.loadSave({ dataset: { id } });
   };
 })();
 

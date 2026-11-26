@@ -73,32 +73,14 @@
             <label class="opt"><input type="radio" name="prog" value="random" ${sel.prog === 'random' ? 'checked' : ''} data-change="newProg"><span><b>무작위 성장</b><span class="small muted">시작 시점부터 역사가 갈라집니다. 잠재력과 나이에 따라 성장이 정해집니다.</span></span></label>
           </div></div>
         </div>
-        <div class="row" style="margin-top:16px"><button class="btn pri" style="padding:12px 22px;font-size:15px" data-act="newStart" ${sel.abbr ? '' : 'disabled'}>${sel.abbr ? `${esc(tsel.ko)} 감독으로 시작` : '팀을 고르세요'}</button>
+        <div class="row" style="margin-top:16px"><span class="small muted">저장 슬롯</span><span id="newSlot"><select disabled><option>슬롯 확인 중…</option></select></span></div>
+        <div class="row" style="margin-top:12px"><button class="btn pri" style="padding:12px 22px;font-size:15px" data-act="newStart" ${sel.abbr ? '' : 'disabled'}>${sel.abbr ? `${esc(tsel.ko)} 감독으로 시작` : '팀을 고르세요'}</button>
           <span class="sp"></span><label class="btn"><input type="file" accept="application/json,.json" style="display:none" data-change="importSave">저장 파일 불러오기</label></div>
       </div>
       <p class="small muted" style="margin-top:14px">선수 능력치는 Basketball-Reference 기록을 바탕으로 계산했습니다. NBA와 관계없는 팬 제작 시뮬레이션입니다.</p>
     </div></div>`;
   };
-  // 이어하기: 이 기기 저장을 먼저 보이고, 클라우드 저장이 도착하면 합친다
-  App.afters.title = async () => {
-    const el = document.getElementById('saves'); if (!el) return;
-    const where = m => m.cloud && m.local ? '<span class="pill good">☁️ 클라우드 · 이 기기</span>' : m.cloud ? '<span class="pill good">☁️ 클라우드</span>' : '<span class="pill">이 기기</span>';
-    const draw = (list, note) => {
-      App._saveList = list;
-      el.innerHTML = list.length || note ? `<div class="card"><h2>이어하기</h2>${list.length ? `<div class="grid">${list.slice(0, 10).map(m => `<div class="row nowrap" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2)">
-      <span class="tbadge" style="${App.tstyle({ colors: m.colors || ['#555555', '#cccccc'] })}">${esc(m.team)}</span>
-      <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div><div style="margin-top:3px">${where(m)}</div></div>
-      <button class="btn pri sm" data-act="loadSave" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div>`).join('')}</div>` : ''}${note ? `<p class="small muted" style="margin:${list.length ? '10px' : '0'} 0 0">${note}</p>` : ''}</div>` : '';
-    };
-    let loc = [];
-    try { loc = (await HM.Store.list()).map(m => Object.assign({}, m, { local: m.updated })); } catch (e) { loc = []; }
-    draw(loc, '☁️ 클라우드 저장을 확인하는 중…');
-    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
-    let all = loc;
-    if (ok) { try { all = await HM.Store.listAll(); } catch (e) { all = loc; } }
-    if (document.getElementById('saves') !== el) return;
-    draw(all, ok ? '☁️ 클라우드 저장이 켜져 있습니다. 진행할 때마다 이 기기와 클라우드(내 계정에만 보임)에 함께 저장됩니다.' : '이 화면에서는 브라우저에만 저장됩니다. 브라우저 데이터가 지워지면 사라지니, 가끔 설정의 "파일로 내보내기"로 백업하세요.');
-  };
+  // 이어하기 목록은 ui-saves.js(App.afters.title)
   A.newYear = el => { App.newSel.year = +el.value; App.newSel.abbr = null; App.render(); };
   A.newTeam = el => { App.newSel.abbr = el.dataset.abbr; App.render(); };
   A.newName = el => { App.newSel.name = el.value; };
@@ -106,6 +88,12 @@
   A.newStart = async () => {
     const sel = App.newSel;
     if (!sel.abbr) return;
+    const sl = App._slots || await App.slots(false);
+    const n = sel.slot || 1;
+    if (sl.by[n]) {
+      const ok = await App.confirm('슬롯 덮어쓰기', `슬롯 ${n}에 있는 저장(${esc(sl.by[n].name)}, ${U.seasonLabel(sl.by[n].season)})을 덮어쓰고 새 게임을 시작할까요?`, '덮어쓰기');
+      if (!ok) return;
+    }
     App.busy(true, '리그를 만드는 중…');
     await App.sleep(30);
     try {
@@ -113,36 +101,27 @@
       Season.setupSeason(G, true);
       Season.welcome(G);
       Season.scanFA(G);
+      G.saveId = HM.Store.slotId(n);
       App.G = G;
       App.ui = { sorts: {}, tabs: {} };
-      await App.save(true);
+      App._slots = null; sel.slotPicked = false;
+      await App.save(true, true);
     } catch (e) { console.error(e); App.busy(false); App.toast('리그를 만들지 못했습니다: ' + e.message, 5000); return; }
     App.busy(false);
     App.go('#/inbox');
   };
-  A.loadSave = async el => {
-    App.busy(true, '불러오는 중…');
-    try {
-      const hint = (App._saveList || []).find(m => m.id === el.dataset.id);
-      const G = await HM.Store.loadBest(el.dataset.id, hint);
-      App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
-      App.busy(false);
-      App.go('#/home');
-    } catch (e) { App.busy(false); App.toast('불러오기 실패: ' + e.message, 4000); }
-  };
-  A.delSave = async el => {
-    const ok = await App.confirm('저장 삭제', '이 저장을 지울까요? 되돌릴 수 없습니다.', '삭제');
-    if (!ok) return;
-    await HM.Store.delAll(el.dataset.id); App.render();
-  };
+  // 불러오기·지우기는 ui-saves.js
   A.importSave = el => {
     const f = el.files && el.files[0]; if (!f) return;
     const r = new FileReader();
     r.onload = async () => {
       try {
         const G = HM.Store.parseImport(r.result);
-        App.G = G; App.ui = { sorts: {}, tabs: {} };
-        await App.save(true);
+        const n = await App.pickSlot('가져온 게임을 둘 슬롯', '파일에서 가져온 게임을 어느 슬롯에 저장할까요?');
+        if (!n) return;
+        G.saveId = HM.Store.slotId(n);
+        App.G = G; App.ui = { sorts: {}, tabs: {} }; App._slots = null;
+        App.busy(true, '저장하는 중…'); await App.save(true, true); App.busy(false);
         App.go('#/home');
       } catch (e) { App.toast('불러오기 실패: ' + e.message, 4000); }
     };

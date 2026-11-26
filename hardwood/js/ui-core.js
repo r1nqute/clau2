@@ -234,28 +234,45 @@
 
   // ---------- 저장 ----------
   // 이 기기(브라우저)에 바로 저장하고, 클라우드에는 최대 40초에 한 번 모아서 올린다
+  // 이 기기에는 바로, 클라우드에는 1분에 한 번 모아서(앱을 내리거나 닫을 때·직접 저장할 때는 바로) 올린다
   let cloudTimer = null, lastCloud = 0, dirtyTimer = null;
+  const CLOUD_EVERY = 60000;
+  App.lastSave = { local: 0, localErr: '' };
+  async function cloudRun() {
+    clearTimeout(cloudTimer); cloudTimer = null;
+    const G = App.G; if (!G || !HM.Store.cloud) return false;
+    lastCloud = Date.now();
+    const ok = await HM.Store.cloud.save(G);
+    const st = HM.Store.cloud.status();
+    if (!ok && st.state === 'error' && !App._cloudWarned) { App._cloudWarned = true; App.toast('클라우드 저장 실패: ' + st.err, 5000); }
+    if (ok) App._cloudWarned = false;
+    App.saveStatus();
+    return ok;
+  }
   App.cloudSave = now => {
-    if (!App.G || !HM.Store.cloud) return;
-    clearTimeout(cloudTimer);
-    const run = async () => {
-      cloudTimer = null; lastCloud = Date.now();
-      const ok = await HM.Store.cloud.save(App.G);
-      const st = HM.Store.cloud.status();
-      if (!ok && st.state === 'error' && !App._cloudWarned) { App._cloudWarned = true; App.toast('클라우드 저장 실패: ' + st.err, 5000); }
-      if (ok) App._cloudWarned = false;
-      if (App.route && App.route.name === 'settings' && App.afters.settings) App.afters.settings();
-    };
-    const wait = now ? 0 : Math.max(0, 40000 - (Date.now() - lastCloud));
-    cloudTimer = setTimeout(run, wait);
+    if (!App.G || !HM.Store.cloud) return Promise.resolve(false);
+    if (now) return cloudRun();
+    if (!cloudTimer) cloudTimer = setTimeout(cloudRun, Math.max(0, CLOUD_EVERY - (Date.now() - lastCloud)));
+    return null;
   };
-  App.save = async (quiet) => {
+  // quiet: 알림 없이, cloudNow: 클라우드에도 바로(끝날 때까지 기다림)
+  App.save = async (quiet, cloudNow) => {
+    const G = App.G; if (!G) return false;
     let localOk = true;
-    try { await HM.Store.save(App.G); }
-    catch (e) { localOk = false; if (!(await HM.Store.cloud?.available())) App.toast('저장 실패: ' + e.message, 4000); }
-    App.cloudSave(!quiet);
-    if (!quiet) App.toast(localOk ? '저장했습니다' : '이 기기에는 저장하지 못해 클라우드에 저장합니다', 2500);
+    try { await HM.Store.save(G); App.lastSave = { local: Date.now(), localErr: '' }; }
+    catch (e) { localOk = false; App.lastSave.localErr = e.message; }
+    let cloudOk = null;
+    const hasCloud = HM.Store.cloud ? await HM.Store.cloud.available() : false;
+    if (hasCloud && (cloudNow || !quiet)) cloudOk = await App.cloudSave(true); else if (hasCloud) App.cloudSave(false);
+    if (!localOk && !hasCloud) App.toast('저장 실패: ' + App.lastSave.localErr, 4000);
+    if (!quiet) {
+      const where = [localOk ? '이 기기 ✓' : '이 기기 ✗', hasCloud ? (cloudOk ? '클라우드 ✓' : '클라우드 ✗') : null].filter(Boolean).join(' · ');
+      App.toast(`슬롯 ${HM.Store.slotOf(G.saveId) || '-'}에 저장했습니다 (${where})${hasCloud && !cloudOk ? ' — ' + HM.Store.cloud.status().err : ''}`, hasCloud && !cloudOk ? 5000 : 2500);
+    }
+    App.saveStatus();
+    return localOk || !!cloudOk;
   };
+  App.saveStatus = () => { if (App.route && App.route.name === 'settings' && App.afters.settings) App.afters.settings(); };
   App.autosave = () => { clearTimeout(dirtyTimer); dirtyTimer = null; if (App.G && App.G.settings.autosave !== false) App.save(true); };
   // 단추·선택으로 무언가 바꾸면 잠시 뒤 자동 저장(여러 번 눌러도 한 번)
   App.dirty = () => {
