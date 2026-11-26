@@ -35,13 +35,13 @@
     return `
     <div class="grid g3">
       <div class="card span2">
-        <div class="row nowrap"><span class="tbadge lg" style="${App.tstyle(t)}">${esc(t.abbr)}</span>
-          <div><h1 style="margin:0">${esc(t.ko)}</h1><div class="muted">${esc(t.name)} · ${t.conf === 'E' ? '동부' : '서부'} 컨퍼런스 · 감독 ${esc(G.manager.name)}</div></div></div>
-        <div class="grid g4 kpi" style="margin-top:14px">
-          <div><h3>성적</h3><b style="font-size:20px">${r.w}-${r.l}</b><div class="small muted">${t.conf === 'E' ? '동부' : '서부'} ${pos}위</div></div>
-          <div><h3>연속</h3><b style="font-size:20px">${r.streak > 0 ? r.streak + '연승' : r.streak < 0 ? (-r.streak) + '연패' : '-'}</b><div class="small muted">최근 10경기 ${r.last.filter(x => x).length}-${r.last.filter(x => !x).length}</div></div>
-          <div><h3>득실</h3><b style="font-size:20px">${r.w + r.l ? ((r.pf - r.pa) / (r.w + r.l) > 0 ? '+' : '') + ((r.pf - r.pa) / (r.w + r.l)).toFixed(1) : '-'}</b><div class="small muted">경기당</div></div>
-          <div><h3>이사회 신뢰</h3><b style="font-size:20px">${conf100}</b><div class="bar" style="margin-top:6px"><i style="width:${conf100}%;background:${conf100 < 30 ? 'var(--bad)' : conf100 < 55 ? 'var(--warn)' : 'var(--good)'}"></i></div></div>
+        <div class="pband" style="${App.tstyle(t)}"><div class="row nowrap"><span class="tbadge lg" style="${App.tstyle(t)}">${esc(t.abbr)}</span>
+          <div style="min-width:0"><h1 style="margin:0">${esc(t.ko)}</h1><div class="sub">${esc(t.name)} · ${t.conf === 'E' ? '동부' : '서부'} 컨퍼런스 · 감독 ${esc(G.manager.name)}</div></div></div></div>
+        <div class="kpis" style="margin-top:10px">
+          <div><h3>성적</h3><b>${r.w}-${r.l}</b><div class="small muted">${t.conf === 'E' ? '동부' : '서부'} ${pos}위</div></div>
+          <div><h3>연속</h3><b>${r.streak > 0 ? r.streak + '연승' : r.streak < 0 ? (-r.streak) + '연패' : '-'}</b><div class="small muted">최근 10경기 ${r.last.filter(x => x).length}-${r.last.filter(x => !x).length}</div></div>
+          <div><h3>득실</h3><b>${r.w + r.l ? ((r.pf - r.pa) / (r.w + r.l) > 0 ? '+' : '') + ((r.pf - r.pa) / (r.w + r.l)).toFixed(1) : '-'}</b><div class="small muted">경기당</div></div>
+          <div><h3>이사회 신뢰</h3><b>${conf100}</b><div class="bar" style="margin-top:6px"><i style="width:${conf100}%;background:${conf100 < 30 ? 'var(--bad)' : conf100 < 55 ? 'var(--warn)' : 'var(--good)'}"></i></div></div>
         </div>
         <div class="note" style="margin-top:12px">🏛️ 이사회 목표: <b>${esc(G.board.exp?.txt || '-')}</b></div>
       </div>
@@ -340,34 +340,49 @@
     else if (p.tid === -1) acts.push(`<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">계약 제안</button>`);
     if (!own && p.tid !== -3) acts.push(`<button class="btn" data-act="shortTog" data-pid="${p.pid}">${App.isShort(p.pid) ? '★ 관심 선수 해제' : '☆ 관심 선수로 등록'}</button>`);
     const prospect = p.tid === -2 ? `<div class="note" style="margin-top:10px">🎓 ${p.prospect.year} 드래프트 후보${p.prospect.realPick ? ` · <span data-spoil>실제 역사: ${p.prospect.realRound}라운드 ${p.prospect.realPick}순위 (${esc(p.prospect.realTeam)})</span>` : ''}</div>` : '';
+    const seasonDelta = (() => { const d = p.ovr - (p.ovrStart ?? p.ovr); return Math.abs(d) >= 0.5 ? `<div class="small num" style="font-weight:800" title="이번 시즌 시작 대비">시즌 ${d > 0 ? '▲' : '▼'}${Math.abs(Math.round(d)) || 1}</div>` : ''; })();
+    const bandStyle = t ? App.tstyle(t) : '--c1:#3a4552;--c2:#6f7c8a;--ct:#ffffff';
     return `
-    <div class="card">
-      <div class="phead">
-        <div class="face" style="${t ? App.tstyle(t) : '--c1:var(--panel3);--c2:var(--muted);--ct:var(--muted)'}">${esc(p.pos)}</div>
-        <div style="min-width:0;flex:1">
-          <h1>${esc(p.name)} ${p.hof ? '<span class="pill warn" title="실제 명예의 전당 헌액자">HOF</span>' : ''}</h1>
-          <div class="sub">${t ? `${App.tchip(t)} ${App.tlink(t)}` : App.tname(p.tid)} · ${R.POS_KO[p.pos]} · ${age}세 · ${p.hgt}cm · ${p.wgt}kg${p.college ? ' · ' + esc(p.college) : ''}</div>
-          <div class="sub">${p.draft ? `${p.draft.year} 드래프트 ${p.draft.round}라운드 ${p.draft.pick}순위 (${esc(p.draft.abbr)})` : p.undrafted ? `${p.undrafted} 드래프트 미지명` : '드래프트 정보 없음'} · NBA ${p.yearsPro || 0}년차</div>
-          <div class="row" style="margin-top:6px">${App.injTag(p)} ${p.injury ? `<span class="small muted">${esc(p.injury.type)}</span>` : ''} <span class="pill">사기 ${App.moraleTxt(p.morale ?? 60)}</span> ${own && App.starterPill ? App.starterPill(p) : ''} ${p.contract ? `<span class="pill">${App.contractTxt(p)}</span>` : ''}</div>
-        </div>
-        <div class="row" style="gap:18px">
-          <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span>${(() => { const d = p.ovr - (p.ovrStart ?? p.ovr); return Math.abs(d) >= 0.5 ? `<div class="small num" style="color:var(${d > 0 ? '--good' : '--bad'})" title="이번 시즌 시작 대비">시즌 ${d > 0 ? '▲' : '▼'}${Math.abs(Math.round(d)) || 1}</div>` : ''; })()}</div>
-          <div class="ovrbig"><b>${pot}</b><span>잠재력</span><div>${App.stars(pot)}</div></div>
+    <div class="card" style="padding-bottom:10px">
+      <div class="pband" style="${bandStyle}">
+        <div class="phead">
+          <div class="face" style="${bandStyle}">${esc(p.pos)}</div>
+          <div class="pinfo">
+            <h1>${esc(p.name)} ${p.hof ? '<span class="pill warn" title="실제 명예의 전당 헌액자">HOF</span>' : ''}</h1>
+            <div class="sub">${t ? `${esc(t.ko)}` : App.tname(p.tid)} · ${R.POS_KO[p.pos]} · ${age}세 · ${p.hgt}cm · ${p.wgt}kg</div>
+            <div class="sub">${p.draft ? `${p.draft.year} 드래프트 ${p.draft.round}라운드 ${p.draft.pick}순위 (${esc(p.draft.abbr)})` : p.undrafted ? `${p.undrafted} 드래프트 미지명` : '드래프트 정보 없음'} · NBA ${p.yearsPro || 0}년차${p.college ? ' · ' + esc(p.college) : ''}</div>
+          </div>
+          <div class="row nowrap" style="gap:14px">
+            <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span>${seasonDelta}</div>
+            <div class="ovrbig"><b>${pot}</b><span>잠재력</span><div>${App.stars(pot)}</div></div>
+          </div>
         </div>
       </div>
+      <div class="row" style="margin-top:10px">${t ? `${App.tchip(t)} ${App.tlink(t)}` : ''} ${App.injTag(p)} ${p.injury ? `<span class="small muted">${esc(p.injury.type)}</span>` : ''} <span class="pill">사기 ${App.moraleTxt(p.morale ?? 60)}</span> ${own && App.starterPill ? App.starterPill(p) : ''} ${p.contract ? `<span class="pill">${App.contractTxt(p)}</span>` : ''}</div>
       ${prospect}
-      <div class="row" style="margin-top:12px">${acts.join('')}</div>
+      <div class="row" style="margin-top:8px">${acts.join('')}</div>
     </div>
-    ${(() => { const ptab = App.ui.tabs.player || 'ov'; const nLog = App.gameLog(p).length; return `<div class="tabs" style="margin-top:14px">${[['ov', '개요'], ['log', `경기별 기록${nLog ? ' ' + nLog : ''}`], ['car', '시즌·커리어 기록']].map(([k, l]) => `<button class="${ptab === k ? 'on' : ''}" data-act="tab" data-group="player" data-tab="${k}">${l}</button>`).join('')}</div>`; })()}
+    ${(() => { const ptab = App.ui.tabs.player || 'ov'; const nLog = App.gameLog(p).length; return `<div class="tabs" style="margin-top:10px">${[['ov', '개요'], ['log', `경기별 기록${nLog ? ' ' + nLog : ''}`], ['car', '시즌·커리어 기록']].map(([k, l]) => `<button class="${ptab === k ? 'on' : ''}" data-act="tab" data-group="player" data-tab="${k}">${l}</button>`).join('')}</div>`; })()}
     ${(App.ui.tabs.player || 'ov') === 'log' ? logTab(p) : (App.ui.tabs.player || 'ov') === 'car' ? `${statRows ? `<div class="card"><h2>게임 속 기록</h2><div class="tw"><table class="t"><thead><tr><th>시즌</th><th>팀</th><th class="r">경기</th><th class="r">분</th><th class="r">득점</th><th class="r">리바</th><th class="r">어시</th><th class="r">스틸</th><th class="r">블록</th><th class="r">FG%</th><th class="r">3P%</th><th class="r">FT%</th><th class="r">평점</th></tr></thead><tbody>${statRows}</tbody></table></div></div>` : '<div class="card"><div class="empty">아직 게임 속 기록이 없습니다.</div></div>'}${real}` : `
-    ${App.gameLog(p).length ? `<div class="card" style="margin-bottom:14px"><div class="row"><h2 style="margin:0">최근 폼</h2>${App.formChips(p, 10)}<span class="sp"></span><button class="btn sm" data-act="tab" data-group="player" data-tab="log">경기별 기록 보기 →</button></div></div>` : ''}
     <div class="grid g3">
-      <div class="card span2"><h2>능력치</h2><div class="attrs">${attrs}</div></div>
-      <div class="card"><h2>플레이 성향</h2>${tend}
-        ${App.posFitHtml && p.tid !== -3 ? App.posFitHtml(p) : ''}
-        <h2 style="margin-top:14px">공헌도</h2><div class="kv small"><span>공격(BPM 환산)</span><span>${p.o >= 0 ? '+' : ''}${p.o.toFixed(1)}</span><span>수비(BPM 환산)</span><span>${p.d >= 0 ? '+' : ''}${p.d.toFixed(1)}</span></div>
-        ${Object.keys(gameAw).length ? `<h2 style="margin-top:14px">게임 속 수상</h2><div class="row">${awHtml(gameAw)}</div>` : ''}
-        ${Object.keys(cnt).length ? `<h2 style="margin-top:14px">실제 수상(시작 이전)</h2><div class="row">${awHtml(cnt)}</div>` : ''}
+      <div class="span2" style="display:grid;gap:10px;align-content:start">
+        <div class="card"><h2>능력치 <span class="r">1~20</span></h2><div class="attrs">${attrs}</div></div>
+        ${App.gameLog(p).length ? `<div class="card"><h2>최근 폼 <span class="r"><button class="btn sm" data-act="tab" data-group="player" data-tab="log">경기별 기록 →</button></span></h2>${App.formChips(p, 10)}</div>` : ''}
+        <div class="card"><h2>플레이 성향</h2>${tend}
+          <div class="kv small" style="margin-top:6px"><span>공헌도 공격(BPM 환산)</span><span>${p.o >= 0 ? '+' : ''}${p.o.toFixed(1)}</span><span>공헌도 수비(BPM 환산)</span><span>${p.d >= 0 ? '+' : ''}${p.d.toFixed(1)}</span></div></div>
+      </div>
+      <div style="display:grid;gap:10px;align-content:start">
+        ${App.posFitHtml && p.tid !== -3 ? `<div class="card">${App.posFitHtml(p)}</div>` : ''}
+        <div class="card"><h2>정보</h2><div class="kv">
+          <span>소속</span><span>${t ? App.tlink(t) : App.tname(p.tid)}</span>
+          <span>포지션</span><span>${R.POS_KO[p.pos]} (${p.pos})</span>
+          <span>나이</span><span>${age}세</span>
+          <span>신체</span><span>${p.hgt}cm · ${p.wgt}kg</span>
+          ${p.contract ? `<span>계약</span><span>${App.contractTxt(p)}</span>` : ''}
+          ${p.tid !== -3 && p.tid !== -2 ? `<span>시장 가치</span><span>${U.money(F.marketValue(p, AI.capYear(G), age))}</span>` : ''}
+          <span>경력</span><span>NBA ${p.yearsPro || 0}년차</span>
+        </div></div>
+        ${Object.keys(gameAw).length || Object.keys(cnt).length ? `<div class="card"><h2>수상</h2>${Object.keys(gameAw).length ? `<h3>게임 속</h3><div class="row">${awHtml(gameAw)}</div>` : ''}${Object.keys(cnt).length ? `<h3 style="margin-top:8px">실제(시작 이전)</h3><div class="row">${awHtml(cnt)}</div>` : ''}</div>` : ''}
       </div>
     </div>`}`;
   };

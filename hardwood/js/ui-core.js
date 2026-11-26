@@ -110,26 +110,39 @@
   App.sleep = sleep;
 
   // ---------- 틀 그리기 ----------
+  // 왼쪽 메뉴: 묶음별
   const NAV = [
-    ['home', '🏠', '홈'], ['inbox', '✉️', '받은 편지함'], ['squad', '👥', '선수단'], ['tactics', '📋', '전술·로테이션'], ['manager', '🧠', '매니저 모드'], ['schedule', '📅', '일정·결과'],
-    ['standings', '🏆', '순위·플레이오프'], ['stats', '📊', '리그 통계'], 'sep', ['trade', '🔄', '트레이드'], ['fa', '✍️', '자유계약'], ['draft', '🎓', '드래프트'],
-    ['finance', '💰', '재정·계약'], 'sep', ['league', '🏟️', '리그·팀'], ['history', '📜', '기록실'], ['settings', '⚙️', '저장·설정'],
+    ['팀', [['home', '🏠', '홈'], ['inbox', '✉️', '받은 편지함'], ['squad', '👥', '선수단'], ['tactics', '📋', '전술·로테이션'], ['manager', '🧠', '매니저 모드']]],
+    ['시즌', [['schedule', '📅', '일정·결과'], ['standings', '🏆', '순위·플레이오프'], ['stats', '📊', '리그 통계']]],
+    ['선수 이동', [['trade', '🔄', '트레이드'], ['fa', '✍️', '자유계약'], ['draft', '🎓', '드래프트'], ['finance', '💰', '재정·계약']]],
+    ['리그', [['league', '🏟️', '리그·팀'], ['history', '📜', '기록실']]],
+    ['', [['settings', '⚙️', '저장·설정']]],
   ];
+  // 구단 색을 화면 전체에(상단 막대·판넬 머리띠·선택 표시)
+  App.clubColors = t => {
+    const st = document.documentElement.style;
+    if (!t) { ['--club', '--club2', '--clubt'].forEach(k => st.removeProperty(k)); return; }
+    st.setProperty('--club', t.colors[0]); st.setProperty('--club2', t.colors[1] || t.colors[0]); st.setProperty('--clubt', App.textOn(t.colors[0]));
+  };
   App.frame = () => {
     const G = App.G, t = G.teams[G.userTid];
     const unread = G.inbox.filter(m => !m.read).length;
     const r = L.rec(G, G.userTid);
-    const nav = NAV.map(n => n === 'sep' ? '<div class="sep"></div>' :
-      `<a href="#/${n[0]}" class="${App.route.name === n[0] ? 'on' : ''}"><span class="ic">${n[1]}</span>${n[2]}${n[0] === 'inbox' && unread ? `<span class="badge">${unread}</span>` : ''}${n[0] === 'draft' && G.phase === 'draft' ? '<span class="badge">!</span>' : ''}${n[0] === 'finance' && G.phase === 'resign' ? '<span class="badge">!</span>' : ''}${n[0] === 'fa' && G.inbox.some(m => m.type === 'scout' && !m.read) ? '<span class="badge">🔔</span>' : ''}</a>`).join('');
+    const badge = k => (k === 'inbox' && unread ? `<span class="badge">${unread}</span>` : '') + (k === 'draft' && G.phase === 'draft' ? '<span class="badge">!</span>' : '') + (k === 'finance' && G.phase === 'resign' ? '<span class="badge">!</span>' : '') + (k === 'fa' && G.inbox.some(m => m.type === 'scout' && !m.read) ? '<span class="badge">🔔</span>' : '');
+    const nav = NAV.map(([g, items]) => (g ? `<div class="grp">${g}</div>` : '<div class="sep"></div>') + items.map(n => `<a href="#/${n[0]}" class="${App.route.name === n[0] ? 'on' : ''}"><span class="ic">${n[1]}</span>${n[2]}${badge(n[0])}</a>`).join('')).join('');
     const contLabel = App.contLabel();
+    App.clubColors(t);
     return `
     <div id="app">
       <header id="top">
         <button class="menu-btn" data-act="menu" aria-label="메뉴">☰</button>
-        <div class="brand"><i></i><span>하드우드 매니저</span></div>
+        <div class="brand hide-m"><i></i><span>하드우드 매니저</span></div>
+        <div class="histbtns"><button class="hbtn" data-act="histBack" ${App.canBack() ? '' : 'disabled'} aria-label="뒤로" title="뒤로">‹</button><button class="hbtn fwd" data-act="histFwd" ${App.canFwd() ? '' : 'disabled'} aria-label="앞으로" title="앞으로">›</button></div>
         <a class="topteam" href="#/home"><span class="tbadge" style="${App.tstyle(t)}">${esc(t.abbr)}</span>
           <span class="meta"><b>${esc(t.ko)}</b><span>${r.w}승 ${r.l}패 · ${App.phaseTxt(G.phase)}</span></span></a>
+        <div class="qsearch"><input type="search" id="qs" placeholder="선수·팀 찾기  ( / )" autocomplete="off" data-input="qsearch" aria-label="선수·팀 찾기"><div class="qres" id="qres" hidden></div></div>
         <div class="topdate"><b>${U.fmtDate(G.date)}</b><span>${U.seasonLabel(G.season)} 시즌</span></div>
+        <button class="iconbtn qbtn" data-act="qsToggle" aria-label="찾기">⌕</button>
         ${App.themeBtn()}
         <div class="cont"><button data-act="cont" data-mode="next">${contLabel} ▸</button><button class="more" data-act="contMenu" aria-label="진행 방식">▾</button></div>
       </header>
@@ -139,6 +152,39 @@
         <div class="cont"><button data-act="cont" data-mode="next">${contLabel} ▸</button><button class="more" data-act="contMenu" aria-label="진행 방식">▾</button></div></div>
     </div>`;
   };
+  // ---------- 빠른 찾기(선수·팀) ----------
+  App.acts.qsearch = el => {
+    const box = document.getElementById('qres'); if (!box) return;
+    const q = el.value.trim().toLowerCase();
+    if (!q) { box.hidden = true; box.innerHTML = ''; return; }
+    const G = App.G;
+    const teams = G.teams.filter(t => t.ko.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.abbr.toLowerCase() === q).slice(0, 4);
+    const players = Object.values(G.players).filter(p => p.name.toLowerCase().includes(q))
+      .sort((a, b) => ((a.tid < 0) - (b.tid < 0)) || ((a.tid === -3) - (b.tid === -3)) || b.ovr - a.ovr).slice(0, 8);
+    const where = p => p.tid >= 0 ? App.tchip(G.teams[p.tid]) : `<span class="pill">${p.tid === -1 ? 'FA' : p.tid === -2 ? '드래프트' : '은퇴'}</span>`;
+    box.innerHTML = (teams.length ? `<div class="qh">팀</div>` + teams.map(t => `<a href="#/team/${t.tid}">${App.tchip(t)} <b>${esc(t.ko)}</b> <span class="small muted">${esc(t.name)}</span></a>`).join('') : '')
+      + (players.length ? `<div class="qh">선수</div>` + players.map(p => `<a href="#/player/${p.pid}">${where(p)} <b>${esc(p.name)}</b> <span class="small muted">${p.pos} · ${App.age(p)}세</span><span class="sp"></span>${p.tid !== -3 ? App.ovr(p.ovr) : ''}</a>`).join('') : '')
+      || '<div class="qe">찾는 선수·팀이 없습니다</div>';
+    box.hidden = false;
+  };
+  App.acts.qsToggle = () => {
+    const top = document.getElementById('top'); if (!top) return;
+    top.classList.toggle('searching');
+    if (top.classList.contains('searching')) setTimeout(() => document.getElementById('qs')?.focus(), 0);
+  };
+  document.addEventListener('keydown', e => {
+    const qs = document.getElementById('qs');
+    if (e.target === qs) {
+      if (e.key === 'Enter') { const a = document.querySelector('#qres a'); if (a) { e.preventDefault(); App.go(a.getAttribute('href')); } }
+      if (e.key === 'Escape') { qs.value = ''; App.acts.qsearch(qs); qs.blur(); document.getElementById('top')?.classList.remove('searching'); }
+      return;
+    }
+    if (e.key === '/' && qs && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && !App.modalOpen) { e.preventDefault(); qs.focus(); }
+  });
+  document.addEventListener('click', e => {
+    const box = document.getElementById('qres');
+    if (box && !box.hidden && !e.target.closest('.qsearch')) { box.hidden = true; document.getElementById('top')?.classList.remove('searching'); }
+  });
   App.contLabel = () => {
     const G = App.G;
     if (App.live && !App.live.finished) return '생중계로';
@@ -155,6 +201,7 @@
     const root = document.getElementById('root');
     const G = App.G;
     if (!G || App.route.name === 'title') {
+      App.clubColors(null);
       root.innerHTML = `<div id="main-title">${App.screens.title()}</div>`;
       App.afters.title && App.afters.title();
       return;
@@ -180,15 +227,29 @@
     const [name, ...params] = h.split('/');
     return { name: name || (App.G ? 'home' : 'title'), params: params.map(decodeURIComponent) };
   }
+  const H = { stack: [], pos: -1, nav: false };
+  function record(r) {
+    const key = '#/' + [r.name, ...r.params.map(encodeURIComponent)].join('/');
+    if (H.nav) { H.nav = false; if (H.stack[H.pos] === key) return; }
+    if (H.stack[H.pos] === key) return;
+    H.stack = H.stack.slice(0, H.pos + 1); H.stack.push(key);
+    if (H.stack.length > 80) H.stack.shift();
+    H.pos = H.stack.length - 1;
+  }
+  App.canBack = () => H.pos > 0;
+  App.canFwd = () => H.pos < H.stack.length - 1;
+  App.acts.histBack = () => { if (!App.canBack()) return; H.pos--; H.nav = true; App.go(H.stack[H.pos]); };
+  App.acts.histFwd = () => { if (!App.canFwd()) return; H.pos++; H.nav = true; App.go(H.stack[H.pos]); };
   function routeTo(h) {
     App.route = parseHash(h);
+    if (App.route.name !== 'title') record(App.route);
     const side = document.getElementById('side'); if (side) side.classList.remove('open');
     if (App.live && App.route.name !== 'live' && App.live.timer) App.pauseLive && App.pauseLive();
     App.render();
   }
   App.go = h => {
     if (!App.useHash) return routeTo(h);
-    if (location.hash === h) App.render(); else location.hash = h;
+    if (location.hash === h) { H.nav = false; App.render(); } else location.hash = h;
   };
   window.addEventListener('hashchange', () => { if (App.useHash) routeTo(location.hash); });
   // 페이지 안 이동: #/로 시작하는 링크를 가로챈다

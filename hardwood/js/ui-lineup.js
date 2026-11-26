@@ -67,9 +67,23 @@
       `<button class="btn" data-act="posModal" data-pid="${p.pid}">🔀 포지션 변경</button>`];
   };
   App.starterPill = p => { const i = App.starterSlot(p.pid); return i >= 0 ? `<span class="pill good" title="주전 라인업">⭐ 주전 · ${POS[i]} 자리</span>` : ''; };
+  // 포지션 그림: 하프코트 위 다섯 자리, 적합도에 따라 색(흰 테두리 = 지금 포지션)
+  const SPOT = { PG: [100, 150], SG: [170, 108], SF: [30, 108], PF: [136, 60], C: [68, 42] };
+  const mapCol = s => s >= 85 ? '#2fbf71' : s >= 70 ? '#9ccc4a' : s >= 55 ? '#e0a92e' : '#d9534f';
   App.posFitHtml = p => {
     const G = G_(); const f = Lu.fit(G, p);
-    return `<h2 style="margin-top:14px">포지션 적합도 <span class="r small muted">${f.stats ? '능력치+이번 시즌 기록' : '능력치 기준'}</span></h2>` + f.rank.map(r => `<div class="row nowrap" style="gap:8px;padding:2px 0"><span class="small" style="width:30px;flex:none"><b>${r.pos}</b></span><div class="bar" style="flex:1"><i style="width:${r.score}%;background:${fitCol(r.score)}"></i></div><span class="small num" style="width:28px;text-align:right">${r.score}</span>${r.pos === p.pos ? '<span class="pill" style="flex:none">현재</span>' : '<span style="width:38px;flex:none"></span>'}</div>`).join('');
+    const best = f.rank[0].pos;
+    const spots = POS.map(pos => {
+      const [x, y] = SPOT[pos]; const sc = f.score[pos]; const cur = pos === p.pos;
+      return `<g><circle cx="${x}" cy="${y}" r="17" fill="${mapCol(sc)}" fill-opacity="${(0.35 + sc / 170).toFixed(2)}" stroke="${cur ? '#ffffff' : 'rgba(0,0,0,.35)'}" stroke-width="${cur ? 3 : 1.5}"/><text x="${x}" y="${y + 5}" text-anchor="middle">${pos}</text><text x="${x}" y="${y + 31}" text-anchor="middle" class="sc">${sc}</text></g>`;
+    }).join('');
+    return `<h2>포지션 <span class="r">${f.stats ? '능력치+이번 시즌 기록' : '능력치 기준'}</span></h2>
+      <div class="posmap"><svg viewBox="0 0 200 192" role="img" aria-label="포지션 적합도: ${f.rank.map(r => `${r.pos} ${r.score}`).join(', ')}">
+        <rect x="0" y="0" width="200" height="192" rx="5" class="court-bg"/>
+        <rect x="68" y="0" width="64" height="76" class="cl"/><circle cx="100" cy="76" r="24" class="cl"/>
+        <path d="M12,0 L12,57 A95,95 0 0 0 188,57 L188,0" class="cl"/><circle cx="100" cy="21" r="3.5" fill="none" stroke="#e2571e" stroke-width="2"/>
+        ${spots}</svg></div>
+      <div class="small muted" style="text-align:center;margin-top:4px">흰 테두리 = 지금 포지션(${p.pos}) · 가장 잘 맞는 자리 <b>${best}</b></div>`;
   };
   A.luBench = el => { Lu.benchPlayer(G_(), +el.dataset.pid); App.toast('벤치로 내렸습니다. 빈 자리는 코치가 채웁니다'); App.rerender(); };
   A.luStart = el => {
