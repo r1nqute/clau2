@@ -810,7 +810,6 @@
     G.logs = {}; G.logsSeason = G.season + 1;
     G.season++;
     const y = G.season;
-    if (HM.Train) { G.season--; HM.Train.seasonEnd(G); G.season++; }
     Prog.developAll(G);
     Prog.normalize(G);
     for (const p of Object.values(G.players)) {
@@ -834,7 +833,7 @@
   function day(G, userResult, opts = {}) {
     const r = dayInner(G, userResult, opts);
     if (r !== 'wait' && r !== 'roster') {
-      scanFA(G); if (HM.Train) HM.Train.tick(G);
+      scanFA(G);
       // 자연 성장은 시즌 중 매주 월요일
       if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) {
         Prog.naturalTick(G);

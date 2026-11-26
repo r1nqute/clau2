@@ -215,7 +215,7 @@
     const tab = opt.tab || 'ov';
     const po = opt.po || 0;
     const base = [
-      { k: 'name', label: '이름', f: p => `${opt.own && App.starterSlot && App.starterSlot(p.pid) >= 0 ? '<span title="주전">⭐</span> ' : ''}${App.plink(p)} ${App.trainTag ? App.trainTag(p) : ''} ${App.injTag(p)}`, v: p => p.name },
+      { k: 'name', label: '이름', f: p => `${opt.own && App.starterSlot && App.starterSlot(p.pid) >= 0 ? '<span title="주전">⭐</span> ' : ''}${App.plink(p)} ${App.injTag(p)}`, v: p => p.name },
       { k: 'pos', label: '포지션', cls: 'c' },
       { k: 'age', label: '나이', cls: 'r', v: p => App.age(p), f: p => App.age(p) },
     ];
@@ -332,9 +332,6 @@
     const acts = [];
     const own = p.tid === G.userTid;
     if (own) {
-      const ts = HM.Train && HM.Train.slotOf(G, p.pid);
-      acts.push(`<button class="btn ${ts ? '' : 'pri'}" data-act="trToggle" data-pid="${p.pid}">${ts ? '🏋️ 집중 훈련 해제' : '🏋️ 집중 훈련 시키기'}</button>`);
-      if (ts) acts.push(`<a class="btn" href="#/training">훈련: ${HM.Train.FOCUS[ts.focus][0]}(${HM.Train.INT[ts.int][0]})</a>`);
       if (App.lineupActs) acts.push(...App.lineupActs(p));
       acts.push(`<button class="btn" data-act="tradeWith" data-pid="${p.pid}">트레이드 블록에</button>`);
       if (G.phase === 'resign' && p.contract && p.contract.exp <= G.season) acts.push(`<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">재계약 협상</button>`);
