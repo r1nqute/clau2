@@ -93,6 +93,8 @@
       this.neutral = !!opt.neutral;
       this.rubber = opt.rubber ?? 0.003;
       this.autoCoach = opt.autoCoach || [false, false];
+      this.record = !!opt.record || this.live; // 장면 기록(코트 시각화·하이라이트)
+      this.plays = [];
       this.possCount = 0;
       this.T = [this.prepTeam(opt.home, 0), this.prepTeam(opt.away, 1)];
       this.q = 1; this.clock = 720; this.elapsed = 0;
@@ -143,6 +145,25 @@
         tfouls: 0, timeouts: 7, manualSubs: null,
         st: { fb: 0, pitp: 0, second: 0, tovPts: 0, bigLead: 0 },
       };
+    }
+
+    // 구조화된 장면 하나(슛·리바운드·턴오버·자유투). 좌표는 하프코트 피트(골대 25, 5.25)
+    rec(ev) {
+      if (!this.record) return;
+      ev.q = this.q; ev.clock = Math.max(0, Math.round(this.clock)); ev.score = this.score.slice(); ev.i = this.plays.length;
+      this.plays.push(ev);
+    }
+    shotLoc(type) {
+      const deg = d => d * Math.PI / 180;
+      let dist, th;
+      if (type === 'rim') { dist = 0.5 + Math.random() * 3.5; th = -80 + Math.random() * 160; }
+      else if (type === 'mid') { dist = 8 + Math.random() * 13; th = -75 + Math.random() * 150; }
+      else {
+        th = -88 + Math.random() * 176;
+        if (Math.abs(th) > 68) { const sgn = th > 0 ? 1 : -1; return { x: +(25 + sgn * (22 + Math.random() * 1.3)).toFixed(1), y: +(1 + Math.random() * 12).toFixed(1) }; }
+        dist = 23.9 + Math.random() * 2.8;
+      }
+      return { x: +(25 + dist * Math.sin(deg(th))).toFixed(1), y: +Math.max(1, 5.25 + dist * Math.cos(deg(th))).toFixed(1) };
     }
 
     say(side, text, kind) {
@@ -363,11 +384,13 @@
         const row = U.wpick(rows, rows.map(x => x.u * (130 - x.r.p.a.hdl)));
         const r = row.r; r.s.tov++;
         const avgStl = D.reduce((s, x) => s + x.p.a.stl, 0) / D.length;
+        let st = null;
         if (Math.random() < 0.5 * avgStl / 58) {
-          const st = U.wpick(D, D.map(x => Math.pow(x.p.a.stl, 2.5)));
+          st = U.wpick(D, D.map(x => Math.pow(x.p.a.stl, 2.5)));
           st.s.stl++;
           this.say(off.side, `${r.nm} 턴오버 (스틸: ${st.nm})`, 'tov');
         } else this.say(off.side, `${r.nm} 턴오버`, 'tov');
+        this.rec({ t: 'tov', side: off.side, pid: r.p.pid, stl: st ? st.p.pid : null });
         return;
       }
       // 슈팅 아닌 파울(보너스면 자유투)
@@ -390,6 +413,7 @@
       const p = sigmoid(row.L[type] + lam + (n && type === 'rim' ? 0.15 : 0));
       const made = Math.random() < p;
       const v = PTS[type];
+      const loc = this.record ? this.shotLoc(type) : null;
       if (made) {
         r.s.fgm++; r.s.fga++; if (type === 'three') { r.s.tpm++; r.s.tpa++; }
         this.addPts(off.side, v, r);
@@ -404,8 +428,10 @@
           ast = U.wpick(others, others.map(x => Math.pow(x.p.a.pss, 3) * (0.5 + x.p.t.usg)));
           ast.s.ast++;
         }
+        const dunk = type === 'rim' && r.p.a.ath > 72 && r.p.hgt >= 198 && Math.random() < 0.45;
+        this.rec(Object.assign({ t: 'shot', side: off.side, pid: r.p.pid, type, made: true, pts: v, ast: ast ? ast.p.pid : null, dunk, put: !!n && type === 'rim', and1: fouled }, loc));
         if (this.live) {
-          const verb = type === 'three' ? '3점슛 성공!' : type === 'mid' ? '중거리 점프슛 성공' : (r.p.a.ath > 72 && r.p.hgt >= 198 && Math.random() < 0.45 ? '덩크!' : n ? '풋백 득점' : '골밑 득점');
+          const verb = type === 'three' ? '3점슛 성공!' : type === 'mid' ? '중거리 점프슛 성공' : (dunk ? '덩크!' : n ? '풋백 득점' : '골밑 득점');
           this.say(off.side, `${r.nm} ${verb}${ast ? ` (어시스트 ${ast.nm})` : ''}`, type === 'three' ? 'three' : 'score');
         }
         if (fouled) {
@@ -418,6 +444,7 @@
       if (fouled) {
         const fl = type === 'rim' ? U.wpick(D, D.map(x => x === row.mdef ? 3 : x.p.a.idef / 40)) : row.mdef;
         this.foul(fl);
+        this.rec(Object.assign({ t: 'shot', side: off.side, pid: r.p.pid, type, made: false, fouled: true }, loc));
         this.say(def.side, `${fl.nm} 슈팅 파울 — ${r.nm} 자유투 ${v}개`);
         this.freeThrows(off, def, r, v, true);
         return;
@@ -428,11 +455,12 @@
       const topBlk = Math.max(...D.map(x => x.p.a.blk));
       if (Math.random() < BLK[type] * Math.pow(topBlk / 70, 1.2)) {
         const b = U.wpick(D, D.map(x => Math.pow(x.p.a.blk, 2.5)));
-        b.s.blk++; blocked = true;
+        b.s.blk++; blocked = b;
         this.say(def.side, `${b.nm} 블록! (${r.nm}의 ${type === 'three' ? '3점슛' : '슛'})`, 'block');
       } else if (this.live) {
         this.say(off.side, `${r.nm} ${type === 'three' ? '3점슛 빗나감' : type === 'mid' ? '점프슛 실패' : '레이업 실패'}`, 'miss');
       }
+      this.rec(Object.assign({ t: 'shot', side: off.side, pid: r.p.pid, type, made: false, blk: blocked ? blocked.p.pid : null }, loc));
       this.rebound(off, def, rows, lam, tov, oreb * (blocked ? 0.75 : 1) * (type === 'three' ? 1.08 : 1), n);
     }
 
@@ -441,6 +469,7 @@
       if (Math.random() < oreb && n < 3) {
         const rb = U.wpick(O, O.map(x => Math.pow(x.p.a.orb, 1.1) * Math.pow(x.p.hgt / 200, 1.5)));
         if (Math.random() < 0.9) rb.s.orb++;
+        this.rec({ t: 'reb', side: off.side, pid: rb.p.pid, off: true });
         this.say(off.side, `${rb.nm} 공격 리바운드`, 'oreb');
         this.tick(Math.min(this.clock, 2 + Math.random() * 4));
         if (this.clock <= 0) return;
@@ -448,6 +477,7 @@
       } else {
         const rb = U.wpick(D, D.map(x => Math.pow(x.p.a.drb, 1.1) * Math.pow(x.p.hgt / 200, 1.5)));
         if (Math.random() < 0.87) rb.s.drb++;
+        this.rec({ t: 'reb', side: def.side, pid: rb.p.pid, off: false });
       }
     }
 
@@ -458,6 +488,7 @@
         r.s.fta++;
         if (Math.random() < q) { r.s.ftm++; made++; this.addPts(off.side, 1, r); }
       }
+      this.rec({ t: 'ft', side: off.side, pid: r.p.pid, k, made });
       if (this.live) this.say(off.side, `${r.nm} 자유투 ${k}개 중 ${made}개 성공`, 'ft');
       if (liveBall && made < k) {
         // 마지막 자유투 실패: 리바운드
@@ -558,7 +589,7 @@
         players: t.roster.map(r => Object.assign({ pid: r.p.pid, min: Math.round(r.min), gs: r.starter ? 1 : 0 }, r.s)),
         st: t.st,
       }));
-      return { teams, ot: Math.max(0, this.q - 4), injuries: this.injuries, lead: this.lead };
+      return { teams, ot: Math.max(0, this.q - 4), injuries: this.injuries, lead: this.lead, plays: this.record ? this.plays : null };
     }
   }
 

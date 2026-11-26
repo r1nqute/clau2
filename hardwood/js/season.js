@@ -267,7 +267,7 @@
     const M = mgrSet(G);
     const coach = M.on && M.auto;
     return new Sim.Game({ home: gameTeam(G, g.h, po), away: gameTeam(G, g.a, po), env: L.env(G), playoffs: po, live, hca: hcaFor(G.season),
-      autoCoach: [coach && g.h === G.userTid, coach && g.a === G.userTid] });
+      autoCoach: [coach && g.h === G.userTid, coach && g.a === G.userTid], record: g.h === G.userTid || g.a === G.userTid });
   }
 
   const INJ = [
@@ -336,7 +336,15 @@
       }
     }
     for (const pid of res.injuries) { const p = G.players[pid]; if (p) injure(G, p); }
-    if (g.h === G.userTid || g.a === G.userTid || po || g.type === 'playin') G.games[g.gid] = { gid: g.gid, date: g.date, h: g.h, a: g.a, type: g.type, res };
+    // 우리 경기는 슛 차트와 하이라이트를 함께 보관한다(장면 기록 전체는 버린다)
+    let shots = null, hl = null;
+    if (res.plays && HM.HL) {
+      const nameOf = pid => G.players[pid] ? Sim.shortName(G.players[pid].name) : '?';
+      shots = HM.HL.compactShots(res.plays);
+      hl = HM.HL.compactHl(HM.HL.top(HM.HL.analyze(res.plays, nameOf, s => G.teams[s === 0 ? g.h : g.a].abbr), 10));
+      delete res.plays;
+    }
+    if (g.h === G.userTid || g.a === G.userTid || po || g.type === 'playin') G.games[g.gid] = Object.assign({ gid: g.gid, date: g.date, h: g.h, a: g.a, type: g.type, res }, shots ? { shots, hl } : {});
     if (G.userTid === g.h || G.userTid === g.a) {
       G.lastUserGame = g.gid;
       // 팬 열기
@@ -825,7 +833,11 @@
   // 오늘 경기를 모두 치르고 하루를 넘긴다. userResult: 사용자가 생중계로 치른 결과
   function day(G, userResult, opts = {}) {
     const r = dayInner(G, userResult, opts);
-    if (r !== 'wait' && r !== 'roster') { scanFA(G); if (HM.Train) HM.Train.tick(G); }
+    if (r !== 'wait' && r !== 'roster') {
+      scanFA(G); if (HM.Train) HM.Train.tick(G);
+      // 자연 성장은 시즌 중 매주 월요일
+      if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) Prog.naturalTick(G);
+    }
     return r;
   }
   function dayInner(G, userResult, opts = {}) {

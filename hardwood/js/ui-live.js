@@ -100,6 +100,8 @@
     return `<div class="card" id="lv-score"></div>
       <div class="row" style="margin:12px 0" id="lv-ctrl"></div>
       <div class="card" id="lv-coach" style="margin-bottom:12px" hidden></div>
+      <div class="card" style="margin-bottom:14px"><h2>코트 <span class="r"><span class="small muted" id="lv-shotstat"></span> <select id="lvShotFilter" data-change="shotFilter">${[['all', '두 팀 슛'], ['0', G.teams[lv.g.h].abbr], ['1', G.teams[lv.g.a].abbr]].map(([v, l]) => `<option value="${v}" ${(lv.shotFilter || 'all') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></span></h2>
+        <div class="viz-grid">${App.courtHtml('lv-viz')}<div><div class="row" style="margin-bottom:8px"><b>🔥 하이라이트</b><span class="sp"></span><button class="btn sm" data-act="liveReel">▶ 다시 보기</button></div><div class="hl-list" id="lv-hl"></div></div></div></div>
       <div class="grid g3">
         <div class="card span2"><h2>중계</h2><div class="feed" id="lv-feed"></div></div>
         <div class="card"><h2>코트 위 <span class="r" id="lv-tf"></span></h2><div id="lv-court"></div></div>
@@ -110,6 +112,7 @@
 
   function liveUpdate() {
     if (App.coachUpdate) App.coachUpdate(); // 코치 조언 패널도 매 포제션 갱신
+    if (App.liveCourt) App.liveCourt();
     const lv = App.live; const G = G_();
     if (!lv || App.route.name !== 'live') return;
     const game = lv.game;

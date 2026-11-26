@@ -352,7 +352,7 @@
           <div class="row" style="margin-top:6px">${App.injTag(p)} ${p.injury ? `<span class="small muted">${esc(p.injury.type)}</span>` : ''} <span class="pill">사기 ${App.moraleTxt(p.morale ?? 60)}</span> ${p.contract ? `<span class="pill">${App.contractTxt(p)}</span>` : ''}</div>
         </div>
         <div class="row" style="gap:18px">
-          <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span></div>
+          <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span>${(() => { const d = p.ovr - (p.ovrStart ?? p.ovr); return Math.abs(d) >= 0.5 ? `<div class="small num" style="color:var(${d > 0 ? '--good' : '--bad'})" title="이번 시즌 시작 대비">시즌 ${d > 0 ? '▲' : '▼'}${Math.abs(Math.round(d)) || 1}</div>` : ''; })()}</div>
           <div class="ovrbig"><b>${pot}</b><span>잠재력</span><div>${App.stars(pot)}</div></div>
         </div>
       </div>
@@ -482,8 +482,9 @@
       <tr><td>${App.tchip(ta)}</td>${qh.map((_, i) => `<td class="r">${ra.q[i] ?? 0}</td>`).join('')}<td class="r"><b>${ra.pts}</b></td></tr>
     </tbody></table></div>
     <div class="small muted" style="margin-top:6px">리드 체인지 ${gm.res.lead?.changes ?? '-'}회 · 최대 리드 ${th.abbr} ${gm.res.lead?.max[0] ?? '-'} / ${ta.abbr} ${gm.res.lead?.max[1] ?? '-'}</div></div>
-    ${box(th, rh)}${box(ta, ra)}`;
+    ${App.boxCourtHtml ? App.boxCourtHtml(gm) : ''}${box(th, rh)}${box(ta, ra)}`;
   };
+  App.afters.game = gid => { if (App.boxCourtAfter) App.boxCourtAfter(G_().games[+gid]); };
   S.game = gid => {
     const gm = G_().games[+gid];
     if (!gm) return '<div class="empty">이 경기의 박스스코어는 보관되어 있지 않습니다(우리 팀 경기와 플레이오프만 이번 시즌 동안 보관됩니다).</div>';

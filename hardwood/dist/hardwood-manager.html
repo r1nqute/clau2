@@ -15,6 +15,7 @@
   --a1t: #2a3440; --a5t: #ffffff;
   --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.05);
   --tc1: #555; --tc2: #ccc;
+  --court: #e7c99b; --court-line: #fffaf0; --paint: #d9a86c;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -23,6 +24,7 @@
     --accent: #2bb38e; --accent2: #1f8f71; --accentText: #08130f; --good: #3ccf7c; --bad: #ff6b6b; --warn: #f0b33c; --info: #5b9bff;
     --a1: #3a4552; --a2: #556271; --a3: #2f8f5f; --a4: #34b56c; --a5: #e0a815; --a1t: #c5ced8;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    --court: #3b2c1f; --court-line: #c9b392; --paint: #4c3826;
     color-scheme: dark;
   }
 }
@@ -31,6 +33,7 @@
   --accent: #2bb38e; --accent2: #1f8f71; --accentText: #08130f; --good: #3ccf7c; --bad: #ff6b6b; --warn: #f0b33c; --info: #5b9bff;
   --a1: #3a4552; --a2: #556271; --a3: #2f8f5f; --a4: #34b56c; --a5: #e0a815; --a1t: #c5ced8;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  --court: #3b2c1f; --court-line: #c9b392; --paint: #4c3826;
   color-scheme: dark;
 }
 
@@ -288,6 +291,27 @@ select { max-width: 100%; }
   .hide-m { display: none !important; }
 }
 @media (min-width: 861px) { .show-m { display: none !important; } }
+
+/* 코트 시각화 */
+.viz-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.court-wrap { position: relative; }
+svg.court { width: 100%; height: auto; display: block; background: var(--court); border-radius: 10px; }
+svg.court .cl { stroke: var(--court-line); stroke-width: 2.5; }
+svg.court .paint { fill: var(--paint); stroke: var(--court-line); stroke-width: 2.5; }
+svg.court .rim { stroke: #e2571e; stroke-width: 3; }
+svg.court .ball { fill: #e8772e; stroke: #5a2a0a; stroke-width: 1.5; }
+svg.court .rimfx.pop { animation: rimpop .6s ease-out forwards; }
+@keyframes rimpop { from { r: 8; opacity: 1; stroke-width: 6; } to { r: 46; opacity: 0; stroke-width: 1; } }
+svg.court .pd { transition: transform .35s ease; }
+svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.65); stroke-width: 3px; }
+.hl-banner { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--hc, var(--accent)); color: #fff; font-weight: 900; padding: 8px 14px; border-radius: 10px; box-shadow: var(--shadow); white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; }
+.hl-banner.show { animation: hlpop .35s ease-out; }
+@keyframes hlpop { from { transform: translateX(-50%) scale(.6); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+.hl-list { display: grid; gap: 6px; max-height: 420px; overflow-y: auto; }
+.hl-item { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; text-align: left; border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 13px; }
+.hl-item:hover { background: var(--panel3); }
+@media (max-width: 860px) { .viz-grid { grid-template-columns: 1fr; } .hl-list { max-height: 260px; } }
+@media (prefers-reduced-motion: reduce) { svg.court .pd { transition: none; } .hl-banner.show, svg.court .rimfx.pop { animation: none; } }
 
 </style>
 </head>
@@ -671,6 +695,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       this.neutral = !!opt.neutral;
       this.rubber = opt.rubber ?? 0.003;
       this.autoCoach = opt.autoCoach || [false, false];
+      this.record = !!opt.record || this.live; // 장면 기록(코트 시각화·하이라이트)
+      this.plays = [];
       this.possCount = 0;
       this.T = [this.prepTeam(opt.home, 0), this.prepTeam(opt.away, 1)];
       this.q = 1; this.clock = 720; this.elapsed = 0;
@@ -721,6 +747,25 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         tfouls: 0, timeouts: 7, manualSubs: null,
         st: { fb: 0, pitp: 0, second: 0, tovPts: 0, bigLead: 0 },
       };
+    }
+
+    // 구조화된 장면 하나(슛·리바운드·턴오버·자유투). 좌표는 하프코트 피트(골대 25, 5.25)
+    rec(ev) {
+      if (!this.record) return;
+      ev.q = this.q; ev.clock = Math.max(0, Math.round(this.clock)); ev.score = this.score.slice(); ev.i = this.plays.length;
+      this.plays.push(ev);
+    }
+    shotLoc(type) {
+      const deg = d => d * Math.PI / 180;
+      let dist, th;
+      if (type === 'rim') { dist = 0.5 + Math.random() * 3.5; th = -80 + Math.random() * 160; }
+      else if (type === 'mid') { dist = 8 + Math.random() * 13; th = -75 + Math.random() * 150; }
+      else {
+        th = -88 + Math.random() * 176;
+        if (Math.abs(th) > 68) { const sgn = th > 0 ? 1 : -1; return { x: +(25 + sgn * (22 + Math.random() * 1.3)).toFixed(1), y: +(1 + Math.random() * 12).toFixed(1) }; }
+        dist = 23.9 + Math.random() * 2.8;
+      }
+      return { x: +(25 + dist * Math.sin(deg(th))).toFixed(1), y: +Math.max(1, 5.25 + dist * Math.cos(deg(th))).toFixed(1) };
     }
 
     say(side, text, kind) {
@@ -941,11 +986,13 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         const row = U.wpick(rows, rows.map(x => x.u * (130 - x.r.p.a.hdl)));
         const r = row.r; r.s.tov++;
         const avgStl = D.reduce((s, x) => s + x.p.a.stl, 0) / D.length;
+        let st = null;
         if (Math.random() < 0.5 * avgStl / 58) {
-          const st = U.wpick(D, D.map(x => Math.pow(x.p.a.stl, 2.5)));
+          st = U.wpick(D, D.map(x => Math.pow(x.p.a.stl, 2.5)));
           st.s.stl++;
           this.say(off.side, `${r.nm} 턴오버 (스틸: ${st.nm})`, 'tov');
         } else this.say(off.side, `${r.nm} 턴오버`, 'tov');
+        this.rec({ t: 'tov', side: off.side, pid: r.p.pid, stl: st ? st.p.pid : null });
         return;
       }
       // 슈팅 아닌 파울(보너스면 자유투)
@@ -968,6 +1015,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       const p = sigmoid(row.L[type] + lam + (n && type === 'rim' ? 0.15 : 0));
       const made = Math.random() < p;
       const v = PTS[type];
+      const loc = this.record ? this.shotLoc(type) : null;
       if (made) {
         r.s.fgm++; r.s.fga++; if (type === 'three') { r.s.tpm++; r.s.tpa++; }
         this.addPts(off.side, v, r);
@@ -982,8 +1030,10 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
           ast = U.wpick(others, others.map(x => Math.pow(x.p.a.pss, 3) * (0.5 + x.p.t.usg)));
           ast.s.ast++;
         }
+        const dunk = type === 'rim' && r.p.a.ath > 72 && r.p.hgt >= 198 && Math.random() < 0.45;
+        this.rec(Object.assign({ t: 'shot', side: off.side, pid: r.p.pid, type, made: true, pts: v, ast: ast ? ast.p.pid : null, dunk, put: !!n && type === 'rim', and1: fouled }, loc));
         if (this.live) {
-          const verb = type === 'three' ? '3점슛 성공!' : type === 'mid' ? '중거리 점프슛 성공' : (r.p.a.ath > 72 && r.p.hgt >= 198 && Math.random() < 0.45 ? '덩크!' : n ? '풋백 득점' : '골밑 득점');
+          const verb = type === 'three' ? '3점슛 성공!' : type === 'mid' ? '중거리 점프슛 성공' : (dunk ? '덩크!' : n ? '풋백 득점' : '골밑 득점');
           this.say(off.side, `${r.nm} ${verb}${ast ? ` (어시스트 ${ast.nm})` : ''}`, type === 'three' ? 'three' : 'score');
         }
         if (fouled) {
@@ -996,6 +1046,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       if (fouled) {
         const fl = type === 'rim' ? U.wpick(D, D.map(x => x === row.mdef ? 3 : x.p.a.idef / 40)) : row.mdef;
         this.foul(fl);
+        this.rec(Object.assign({ t: 'shot', side: off.side, pid: r.p.pid, type, made: false, fouled: true }, loc));
         this.say(def.side, `${fl.nm} 슈팅 파울 — ${r.nm} 자유투 ${v}개`);
         this.freeThrows(off, def, r, v, true);
         return;
@@ -1006,11 +1057,12 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       const topBlk = Math.max(...D.map(x => x.p.a.blk));
       if (Math.random() < BLK[type] * Math.pow(topBlk / 70, 1.2)) {
         const b = U.wpick(D, D.map(x => Math.pow(x.p.a.blk, 2.5)));
-        b.s.blk++; blocked = true;
+        b.s.blk++; blocked = b;
         this.say(def.side, `${b.nm} 블록! (${r.nm}의 ${type === 'three' ? '3점슛' : '슛'})`, 'block');
       } else if (this.live) {
         this.say(off.side, `${r.nm} ${type === 'three' ? '3점슛 빗나감' : type === 'mid' ? '점프슛 실패' : '레이업 실패'}`, 'miss');
       }
+      this.rec(Object.assign({ t: 'shot', side: off.side, pid: r.p.pid, type, made: false, blk: blocked ? blocked.p.pid : null }, loc));
       this.rebound(off, def, rows, lam, tov, oreb * (blocked ? 0.75 : 1) * (type === 'three' ? 1.08 : 1), n);
     }
 
@@ -1019,6 +1071,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       if (Math.random() < oreb && n < 3) {
         const rb = U.wpick(O, O.map(x => Math.pow(x.p.a.orb, 1.1) * Math.pow(x.p.hgt / 200, 1.5)));
         if (Math.random() < 0.9) rb.s.orb++;
+        this.rec({ t: 'reb', side: off.side, pid: rb.p.pid, off: true });
         this.say(off.side, `${rb.nm} 공격 리바운드`, 'oreb');
         this.tick(Math.min(this.clock, 2 + Math.random() * 4));
         if (this.clock <= 0) return;
@@ -1026,6 +1079,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       } else {
         const rb = U.wpick(D, D.map(x => Math.pow(x.p.a.drb, 1.1) * Math.pow(x.p.hgt / 200, 1.5)));
         if (Math.random() < 0.87) rb.s.drb++;
+        this.rec({ t: 'reb', side: def.side, pid: rb.p.pid, off: false });
       }
     }
 
@@ -1036,6 +1090,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         r.s.fta++;
         if (Math.random() < q) { r.s.ftm++; made++; this.addPts(off.side, 1, r); }
       }
+      this.rec({ t: 'ft', side: off.side, pid: r.p.pid, k, made });
       if (this.live) this.say(off.side, `${r.nm} 자유투 ${k}개 중 ${made}개 성공`, 'ft');
       if (liveBall && made < k) {
         // 마지막 자유투 실패: 리바운드
@@ -1136,7 +1191,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         players: t.roster.map(r => Object.assign({ pid: r.p.pid, min: Math.round(r.min), gs: r.starter ? 1 : 0 }, r.s)),
         st: t.st,
       }));
-      return { teams, ot: Math.max(0, this.q - 4), injuries: this.injuries, lead: this.lead };
+      return { teams, ot: Math.max(0, this.q - 4), injuries: this.injuries, lead: this.lead, plays: this.record ? this.plays : null };
     }
   }
 
@@ -1149,6 +1204,77 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   }
 
   HM.Sim = { Game, autoRotation, rating, shortName, tacticTermFor };
+})();
+
+</script>
+<script>
+// 하이라이트: 경기 장면 기록(plays)에서 볼 만한 장면을 골라 점수와 설명을 붙인다
+(function () {
+  const HM = globalThis.HM = globalThis.HM || {};
+
+  // plays: Game.plays, nameOf(pid) → 이름, teamOf(side) → 약어
+  function analyze(plays, nameOf, teamOf) {
+    const out = [];
+    let run = [0, 0], runFrom = 0, runShown = false;
+    for (let i = 0; i < plays.length; i++) {
+      const e = plays[i];
+      const nm = e.pid !== undefined ? nameOf(e.pid) : '';
+      const after = e.score;
+      if (e.t === 'shot' && e.made) {
+        const pts = e.pts || 0;
+        const before = after.slice(); before[e.side] -= pts;
+        const mb = before[e.side] - before[1 - e.side], ma = after[e.side] - after[1 - e.side];
+        const late = e.q >= 4 && e.clock <= 120;
+        const clutch = late && Math.abs(mb) <= 5;
+        let sc = 0; const tags = [];
+        if (e.dunk) { sc += 3; tags.push('덩크'); }
+        if (e.type === 'three') { sc += 1.5; }
+        if (e.and1) { sc += 1; tags.unshift('앤드원'); }
+        if (e.put) { sc += 1; tags.push('풋백'); }
+        if (clutch) sc += 3;
+        if (mb <= 0 && ma > 0) { sc += e.q >= 4 ? 2.5 : 1; tags.unshift('역전'); }
+        else if (ma === 0) { sc += e.q >= 4 ? 2 : 0.5; tags.unshift('동점'); }
+        // 버저비터: 쿼터 마지막 순간의 점프슛(골밑 마무리는 제외)
+        if (e.clock <= 1 && e.type !== 'rim') { sc += e.q >= 4 && Math.abs(mb) <= 3 ? 6 : 3; tags.unshift('버저비터'); }
+        // 승부가 기운 가비지 타임은 덜 중요하다
+        if (Math.abs(mb) >= (e.q >= 4 ? 15 : 22)) sc *= 0.5;
+        const kind = e.type === 'three' ? '3점슛' : e.dunk ? '' : e.type === 'mid' ? '점프슛' : '골밑슛';
+        const cap = `${nm} ${tags.filter(t => t !== '덩크').join(' ')} ${e.dunk ? '덩크' : kind}${sc >= 6 ? '!!' : '!'}`.replace(/\s+/g, ' ').trim();
+        if (sc >= 3) out.push({ i, sc, cap, e, clutch });
+        // 연속 득점
+        if (run[1 - e.side] > 0) { run = [0, 0]; runFrom = i; runShown = false; }
+        run[e.side] += pts;
+        if (run[e.side] >= 10 && !runShown) { runShown = true; out.push({ i, sc: 3 + run[e.side] / 5, cap: `${run[e.side]}-0 런! ${teamOf(e.side)}가 흐름을 잡습니다`, e, run: true, from: runFrom }); }
+      } else if (e.t === 'ft' && e.made) {
+        if (run[1 - e.side] > 0) { run = [0, 0]; runFrom = i; runShown = false; }
+        run[e.side] += e.made;
+        const before = after.slice(); before[e.side] -= e.made;
+        if (e.q >= 4 && e.clock <= 30 && before[e.side] - before[1 - e.side] <= 0 && after[e.side] > after[1 - e.side]) out.push({ i, sc: 4, cap: `${nm} 승부를 가르는 자유투`, e });
+      } else if (e.t === 'shot' && !e.made && e.blk) {
+        const late = e.q >= 4 && e.clock <= 120 && Math.abs(after[0] - after[1]) <= 5;
+        out.push({ i, sc: 2.5 + (late ? 3 : 0), cap: `${nameOf(e.blk)} 블록${late ? '으로 승부처를 지킵니다' : '!'}`, e, def: true });
+      } else if (e.t === 'tov' && e.stl) {
+        const late = e.q >= 4 && e.clock <= 60 && Math.abs(after[0] - after[1]) <= 4;
+        if (late) out.push({ i, sc: 4.5, cap: `${nameOf(e.stl)} 결정적인 스틸!`, e, def: true });
+      }
+    }
+    return out;
+  }
+  // 상위 n개(시간 순)
+  function top(list, n = 10) {
+    // 평범한 블록은 세 개까지만(득점 장면이 먼저)
+    let blk = 0;
+    const pick = list.slice().sort((a, b) => b.sc - a.sc).filter(h => !(h.def && h.sc < 4 && ++blk > 3));
+    return pick.slice(0, n).sort((a, b) => a.i - b.i);
+  }
+  // 저장용: 슛 차트 압축 [x, y, 성공, 편, 종류(0 골밑·1 중거리·2 3점)]
+  function compactShots(plays) {
+    return plays.filter(e => e.t === 'shot' && !e.fouled && e.x !== undefined).map(e => [e.x, e.y, e.made ? 1 : 0, e.side, e.type === 'rim' ? 0 : e.type === 'mid' ? 1 : 2]);
+  }
+  function compactHl(list) {
+    return list.map(h => ({ cap: h.cap, pid: h.e.pid, q: h.e.q, clock: h.e.clock, side: h.e.side, x: h.e.x, y: h.e.y, made: h.e.made ? 1 : 0, t: h.e.t, def: !!h.def, score: h.e.score }));
+  }
+  HM.HL = { analyze, top, compactShots, compactHl };
 })();
 
 </script>
@@ -1544,6 +1670,9 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   // 무작위 성장
   function randomDevelop(G, p, age) {
     let d = ageCurve(age);
+    // 시즌 중에 이미 자란 몫(자연 성장)은 빼서 두 번 오르지 않게 한다
+    const nat = p.natGain || 0;
+    void nat;
     if (age >= 29 && HM.Train && HM.Train.isTrainee(G, p.pid)) d += 0.8; // 유지 훈련
     const gap = p.pa - p.ovr;
     if (age <= 25 && gap > 0) d += gap * (age <= 21 ? 0.22 : 0.17);
@@ -1551,6 +1680,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     if (gap <= 0 && d > 0) d *= 0.3;
     d += (p.a.wrk - 60) / 40;
     d += U.gauss(0, age <= 24 ? 2.6 : 2.0);
+    if (nat > 0) { d -= nat * 0.8; if (age <= 25) d = Math.max(d, 0); }
     shiftOvr(p, d, age);
     if (age >= 27) p.pa = Math.max(p.ovr, p.pa - 1.5);
   }
@@ -1569,6 +1699,39 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       P.update(p);
     }
     if (HM.Train) HM.Train.applyBonus(p, age);
+  }
+
+  // 시즌 중 자연 성장(매주): 젊은 선수가 잠재력 쪽으로 조금씩 자란다.
+  // 실제 커리어 모드에서 다음 시즌 실제 기록이 있으면 그 수준이 목표가 된다.
+  function naturalTick(G) {
+    const y = G.season, d = D();
+    for (const p of Object.values(G.players)) {
+      if (p.tid < 0) continue;
+      const age = P.age(p, y);
+      if (age > 27) continue;
+      let target = p.pa;
+      if (G.settings.prog === 'real' && p.rid && y + 1 <= d.last) {
+        const s = L.snapAt(p.rid, y + 1);
+        if (s) { const x = L.decodeSnap(s); target = Math.min(p.pa, R.ovr(x.a, x.t) + (p.dev || 0)); }
+      }
+      const gap = target - p.ovr;
+      if (gap <= 0.3) continue;
+      const ls = p.stats.filter(l => l.s === y && !l.po);
+      const gp = ls.reduce((s, l) => s + l.gp, 0), mins = ls.reduce((s, l) => s + l.min, 0);
+      const mf = U.clamp(0.75 + (gp ? mins / gp : 0) / 60, 0.75, 1.3);
+      const af = age <= 22 ? 1.2 : age <= 25 ? 1.0 : 0.6;
+      const dOvr = gap * 0.012 * af * mf * (0.7 + p.a.wrk / 200);
+      // 작은 몫은 모아 두었다가 0.3 이상이 되면 한꺼번에 반영한다
+      p.natAcc = (p.natAcc || 0) + dOvr;
+      if (p.natAcc < 0.3) continue;
+      const step = Math.min(p.natAcc, gap);
+      p.natAcc = 0;
+      const pa = p.pa, before = p.ovr;
+      const diff = R.ovrToBpm(Math.min(99, p.ovr + step)) - (p.o + p.d);
+      R.fitTo(p.a, p.t, p.o + diff * 0.68, p.d + diff * 0.32);
+      P.update(p); p.pa = Math.max(pa, p.ovr);
+      p.natGain = (p.natGain || 0) + Math.max(0, p.ovr - before);
+    }
   }
 
   // 새 시즌 직전: 모든 선수 성장/노쇠
@@ -1593,6 +1756,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         }
       }
       if (!done) randomDevelop(G, p, age);
+      p.natGain = 0; p.natAcc = 0;
       if (p.stats.some(l => l.s === y - 1 && l.gp > 0)) p.yearsPro = (p.yearsPro || 0) + 1;
     }
   }
@@ -1673,7 +1837,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     return delta;
   }
 
-  HM.Prog = { developAll, retirements, injectEntrants, randomDevelop, shiftOvr, ageCurve, normalize, measure };
+  HM.Prog = { naturalTick, developAll, retirements, injectEntrants, randomDevelop, shiftOvr, ageCurve, normalize, measure };
 })();
 
 </script>
@@ -2768,7 +2932,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const M = mgrSet(G);
     const coach = M.on && M.auto;
     return new Sim.Game({ home: gameTeam(G, g.h, po), away: gameTeam(G, g.a, po), env: L.env(G), playoffs: po, live, hca: hcaFor(G.season),
-      autoCoach: [coach && g.h === G.userTid, coach && g.a === G.userTid] });
+      autoCoach: [coach && g.h === G.userTid, coach && g.a === G.userTid], record: g.h === G.userTid || g.a === G.userTid });
   }
 
   const INJ = [
@@ -2837,7 +3001,15 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       }
     }
     for (const pid of res.injuries) { const p = G.players[pid]; if (p) injure(G, p); }
-    if (g.h === G.userTid || g.a === G.userTid || po || g.type === 'playin') G.games[g.gid] = { gid: g.gid, date: g.date, h: g.h, a: g.a, type: g.type, res };
+    // 우리 경기는 슛 차트와 하이라이트를 함께 보관한다(장면 기록 전체는 버린다)
+    let shots = null, hl = null;
+    if (res.plays && HM.HL) {
+      const nameOf = pid => G.players[pid] ? Sim.shortName(G.players[pid].name) : '?';
+      shots = HM.HL.compactShots(res.plays);
+      hl = HM.HL.compactHl(HM.HL.top(HM.HL.analyze(res.plays, nameOf, s => G.teams[s === 0 ? g.h : g.a].abbr), 10));
+      delete res.plays;
+    }
+    if (g.h === G.userTid || g.a === G.userTid || po || g.type === 'playin') G.games[g.gid] = Object.assign({ gid: g.gid, date: g.date, h: g.h, a: g.a, type: g.type, res }, shots ? { shots, hl } : {});
     if (G.userTid === g.h || G.userTid === g.a) {
       G.lastUserGame = g.gid;
       // 팬 열기
@@ -3326,7 +3498,11 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   // 오늘 경기를 모두 치르고 하루를 넘긴다. userResult: 사용자가 생중계로 치른 결과
   function day(G, userResult, opts = {}) {
     const r = dayInner(G, userResult, opts);
-    if (r !== 'wait' && r !== 'roster') { scanFA(G); if (HM.Train) HM.Train.tick(G); }
+    if (r !== 'wait' && r !== 'roster') {
+      scanFA(G); if (HM.Train) HM.Train.tick(G);
+      // 자연 성장은 시즌 중 매주 월요일
+      if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) Prog.naturalTick(G);
+    }
     return r;
   }
   function dayInner(G, userResult, opts = {}) {
@@ -4540,7 +4716,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
           <div class="row" style="margin-top:6px">${App.injTag(p)} ${p.injury ? `<span class="small muted">${esc(p.injury.type)}</span>` : ''} <span class="pill">사기 ${App.moraleTxt(p.morale ?? 60)}</span> ${p.contract ? `<span class="pill">${App.contractTxt(p)}</span>` : ''}</div>
         </div>
         <div class="row" style="gap:18px">
-          <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span></div>
+          <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span>${(() => { const d = p.ovr - (p.ovrStart ?? p.ovr); return Math.abs(d) >= 0.5 ? `<div class="small num" style="color:var(${d > 0 ? '--good' : '--bad'})" title="이번 시즌 시작 대비">시즌 ${d > 0 ? '▲' : '▼'}${Math.abs(Math.round(d)) || 1}</div>` : ''; })()}</div>
           <div class="ovrbig"><b>${pot}</b><span>잠재력</span><div>${App.stars(pot)}</div></div>
         </div>
       </div>
@@ -4670,8 +4846,9 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       <tr><td>${App.tchip(ta)}</td>${qh.map((_, i) => `<td class="r">${ra.q[i] ?? 0}</td>`).join('')}<td class="r"><b>${ra.pts}</b></td></tr>
     </tbody></table></div>
     <div class="small muted" style="margin-top:6px">리드 체인지 ${gm.res.lead?.changes ?? '-'}회 · 최대 리드 ${th.abbr} ${gm.res.lead?.max[0] ?? '-'} / ${ta.abbr} ${gm.res.lead?.max[1] ?? '-'}</div></div>
-    ${box(th, rh)}${box(ta, ra)}`;
+    ${App.boxCourtHtml ? App.boxCourtHtml(gm) : ''}${box(th, rh)}${box(ta, ra)}`;
   };
+  App.afters.game = gid => { if (App.boxCourtAfter) App.boxCourtAfter(G_().games[+gid]); };
   S.game = gid => {
     const gm = G_().games[+gid];
     if (!gm) return '<div class="empty">이 경기의 박스스코어는 보관되어 있지 않습니다(우리 팀 경기와 플레이오프만 이번 시즌 동안 보관됩니다).</div>';
@@ -5414,6 +5591,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     return `<div class="card" id="lv-score"></div>
       <div class="row" style="margin:12px 0" id="lv-ctrl"></div>
       <div class="card" id="lv-coach" style="margin-bottom:12px" hidden></div>
+      <div class="card" style="margin-bottom:14px"><h2>코트 <span class="r"><span class="small muted" id="lv-shotstat"></span> <select id="lvShotFilter" data-change="shotFilter">${[['all', '두 팀 슛'], ['0', G.teams[lv.g.h].abbr], ['1', G.teams[lv.g.a].abbr]].map(([v, l]) => `<option value="${v}" ${(lv.shotFilter || 'all') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></span></h2>
+        <div class="viz-grid">${App.courtHtml('lv-viz')}<div><div class="row" style="margin-bottom:8px"><b>🔥 하이라이트</b><span class="sp"></span><button class="btn sm" data-act="liveReel">▶ 다시 보기</button></div><div class="hl-list" id="lv-hl"></div></div></div></div>
       <div class="grid g3">
         <div class="card span2"><h2>중계</h2><div class="feed" id="lv-feed"></div></div>
         <div class="card"><h2>코트 위 <span class="r" id="lv-tf"></span></h2><div id="lv-court"></div></div>
@@ -5424,6 +5603,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
   function liveUpdate() {
     if (App.coachUpdate) App.coachUpdate(); // 코치 조언 패널도 매 포제션 갱신
+    if (App.liveCourt) App.liveCourt();
     const lv = App.live; const G = G_();
     if (!lv || App.route.name !== 'live') return;
     const game = lv.game;
@@ -5528,6 +5708,222 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const want = ids.map(id => t.roster.find(r => r.p.pid === id));
     lv.game.setCourt(t, want);
     App.closeModal(); App.resumeLive();
+  };
+})();
+
+</script>
+<script>
+// 코트 시각화: 슛 차트, 선수 위치, 슛 애니메이션, 하이라이트 배너·다시 보기
+(function () {
+  const HM = globalThis.HM;
+  const U = HM.U, App = HM.App, HL = HM.HL, Sim = HM.Sim;
+  const esc = U.esc;
+  const A = App.acts;
+  const G_ = () => App.G;
+  const RIM = { x: 250, y: 52.5 };
+  // 포지션별 공격 자리(하프코트, 10px = 1ft)
+  const SLOT = [[250, 330], [425, 225], [75, 225], [355, 115], [160, 95]];
+  const POSN = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+
+  const LINES = `
+    <rect x="1" y="1" width="498" height="468" class="cl" fill="none"/>
+    <rect x="170" y="1" width="160" height="189" class="paint"/>
+    <circle cx="250" cy="190" r="60" class="cl" fill="none"/>
+    <path d="M210,52.5 A40,40 0 0 0 290,52.5" class="cl" fill="none"/>
+    <path d="M30,1 L30,142 A237.5,237.5 0 0 0 470,142 L470,1" class="cl" fill="none"/>
+    <line x1="220" y1="40" x2="280" y2="40" class="cl" stroke-width="3"/>
+    <circle cx="250" cy="52.5" r="7.5" class="rim" fill="none"/>
+    <path d="M190,469 A60,60 0 0 1 310,469" class="cl" fill="none"/>`;
+
+  App.courtHtml = (id, extra = '') => `<div class="court-wrap" id="${id}"><svg viewBox="0 0 500 470" class="court" role="img" aria-label="코트">
+      ${LINES}<g class="shots"></g><g class="pl"></g>
+      <circle class="rimfx" cx="250" cy="52.5" r="8" fill="none" opacity="0"/>
+      <circle class="ball" cx="250" cy="330" r="6" opacity="0"/>
+    </svg><div class="hl-banner" hidden></div>${extra}</div>`;
+
+  const q = (id, sel) => document.querySelector(`#${id} ${sel}`);
+  // 코트 위에서 잘 보이고 두 팀이 서로 구분되는 색을 고른다(팀 대표색 → 보조색 → 대체색)
+  const rgb = c => { c = String(c || '#888').replace('#', ''); if (c.length === 3) c = c.split('').map(x => x + x).join(''); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16) || 0); };
+  const cdist = (a, b) => { const x = rgb(a), y = rgb(b); return Math.sqrt(0.3 * (x[0] - y[0]) ** 2 + 0.59 * (x[1] - y[1]) ** 2 + 0.11 * (x[2] - y[2]) ** 2); };
+  function vizColors(teams) {
+    let court = '#3b2c1f';
+    try { court = getComputedStyle(document.documentElement).getPropertyValue('--court').trim() || court; } catch (e) { /* 기본값 */ }
+    const pick = (t, avoid) => {
+      const cs = [t.colors[0], t.colors[1], '#ffffff', '#ff4d6d', '#2ee6a8', '#ffd23f', '#111111'].filter(Boolean);
+      const score = c => Math.min(cdist(c, court), avoid ? cdist(c, avoid) : 999);
+      return cs.find(c => score(c) >= 80) || cs.slice().sort((x, y) => score(y) - score(x))[0];
+    };
+    const h = pick(teams[0]);
+    return [h, pick(teams[1], h)];
+  }
+  App.vizColors = vizColors;
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+  // 슛 표시: 성공 ● / 실패 ✕
+  function marker(x, y, made, color) {
+    const g = el('g', { class: 'mk' });
+    if (made) g.appendChild(el('circle', { cx: x, cy: y, r: 6, fill: color, stroke: '#fff', 'stroke-width': 1.2, 'fill-opacity': 0.9 }));
+    else {
+      g.appendChild(el('line', { x1: x - 5, y1: y - 5, x2: x + 5, y2: y + 5, stroke: color, 'stroke-width': 2.4 }));
+      g.appendChild(el('line', { x1: x - 5, y1: y + 5, x2: x + 5, y2: y - 5, stroke: color, 'stroke-width': 2.4 }));
+    }
+    return g;
+  }
+  App.courtShots = (id, shots, colors, filter = 'all') => {
+    const g = q(id, '.shots'); if (!g) return;
+    g.innerHTML = '';
+    for (const s of shots) {
+      if (filter !== 'all' && String(s[3]) !== String(filter)) continue;
+      g.appendChild(marker(s[0] * 10, s[1] * 10, s[2], colors[s[3]]));
+    }
+  };
+  App.courtAddShot = (id, e, color) => { const g = q(id, '.shots'); if (g && e.x !== undefined) g.appendChild(marker(e.x * 10, e.y * 10, e.made, color)); };
+
+  // 코트 위 열 명(공격은 자리, 수비는 골대 쪽으로 조금)
+  App.courtPlayers = (id, off, def, offC, defC) => {
+    const g = q(id, '.pl'); if (!g) return;
+    g.innerHTML = '';
+    const place = (list, col, isDef) => {
+      const sorted = list.slice().sort((a, b) => (POSN[a.pos] ?? 2) - (POSN[b.pos] ?? 2));
+      sorted.forEach((p, i) => {
+        let [x, y] = SLOT[i] || SLOT[0];
+        if (isDef) { x = x + (RIM.x - x) * 0.22 + 8; y = y + (RIM.y - y) * 0.22; }
+        const gg = el('g', { class: 'pd', 'data-pid': p.pid, transform: `translate(${x},${y})` });
+        gg.appendChild(el('circle', { r: 13, fill: isDef ? 'none' : col, stroke: col, 'stroke-width': isDef ? 3.5 : 2, opacity: isDef ? 0.9 : 1 }));
+        const t = el('text', { y: 27, 'text-anchor': 'middle', class: 'pn' }); t.textContent = p.nm.length > 9 ? p.nm.slice(0, 8) + '…' : p.nm;
+        gg.appendChild(t);
+        g.appendChild(gg);
+      });
+    };
+    place(def, defC, true); place(off, offC, false);
+  };
+
+  // 슛 애니메이션: 슈터가 그 자리로 가고, 공이 골대로 날아간다
+  App.courtShoot = (id, e, color, ms = 650) => new Promise(res => {
+    const ball = q(id, '.ball'), fx = q(id, '.rimfx');
+    if (!ball || e.x === undefined) return res();
+    const sx = e.x * 10, sy = e.y * 10;
+    const dot = q(id, `.pd[data-pid="${e.pid}"]`);
+    if (dot) dot.setAttribute('transform', `translate(${sx},${sy + 14})`);
+    ball.setAttribute('opacity', 1);
+    const end = e.made ? RIM : { x: RIM.x + (Math.random() - 0.5) * 60, y: RIM.y + 25 + Math.random() * 40 };
+    const t0 = performance.now();
+    const step = now => {
+      const t = Math.min(1, (now - t0) / ms);
+      const x = sx + (end.x - sx) * t, y = sy + (end.y - sy) * t;
+      const h = Math.sin(Math.PI * Math.min(1, t * (e.made ? 1 : 0.9)));
+      ball.setAttribute('cx', x); ball.setAttribute('cy', y - h * 18); ball.setAttribute('r', 6 + h * 4);
+      if (t < 1) return requestAnimationFrame(step);
+      if (e.made) { fx.setAttribute('stroke', color); fx.setAttribute('opacity', 1); fx.setAttribute('r', 8); fx.classList.remove('pop'); void fx.getBBox(); fx.classList.add('pop'); }
+      setTimeout(() => { ball.setAttribute('opacity', 0); App.courtAddShot(id, e, color); res(); }, 140);
+    };
+    requestAnimationFrame(step);
+  });
+
+  App.courtBanner = (id, text, color, ms = 1800) => {
+    const b = q(id, '.hl-banner'); if (!b) return;
+    b.textContent = text; b.style.setProperty('--hc', color); b.style.color = App.textOn(color); b.hidden = false;
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    clearTimeout(b._t); b._t = setTimeout(() => { b.hidden = true; }, ms);
+  };
+
+  // ---------- 생중계 ----------
+  const nameOf = pid => { const p = G_().players[pid]; return p ? Sim.shortName(p.name) : '?'; };
+  App.liveCourt = () => {
+    const lv = App.live; if (!lv || !document.getElementById('lv-viz')) return;
+    const G = G_(), game = lv.game;
+    const teams = [G.teams[lv.g.h], G.teams[lv.g.a]];
+    const colors = vizColors(teams);
+    const filter = lv.shotFilter || 'all';
+    const plays = game.plays || [];
+    if (lv.hlSeen === undefined) lv.hlSeen = 0;
+    // 화면을 새로 그렸으면(새 svg) 지금까지의 슛을 한 번에 다시 찍는다
+    const svg = q('lv-viz', 'svg');
+    if (!svg._hm) { svg._hm = true; App.courtShots('lv-viz', HL.compactShots(plays), colors, filter); lv.playIdx = plays.length; }
+    const fresh = plays.slice(lv.playIdx); lv.playIdx = plays.length;
+    // 선수 위치: 공을 가진 팀이 공격
+    const off = game.T[game.poss], def = game.T[1 - game.poss];
+    const mk = t => t.court.map(r => ({ pid: r.p.pid, pos: r.p.pos, nm: r.nm }));
+    const isShot = e => e.t === 'shot' && !e.fouled;
+    const shot = fresh.filter(isShot).pop();
+    const animate = !lv.paused && lv.speed <= 2 && !lv.finished;
+    if (animate && shot) {
+      // 슛을 쏜 팀이 공격인 장면으로 그린다
+      const so = game.T[shot.side], sd = game.T[1 - shot.side];
+      App.courtPlayers('lv-viz', mk(so), mk(sd), colors[shot.side], colors[1 - shot.side]);
+      for (const e of fresh) if (isShot(e) && e !== shot && (filter === 'all' || String(e.side) === filter)) App.courtAddShot('lv-viz', e, colors[e.side]);
+      if (filter === 'all' || String(shot.side) === filter) App.courtShoot('lv-viz', shot, colors[shot.side], lv.speed === 1 ? 800 : 450);
+    } else {
+      App.courtPlayers('lv-viz', mk(off), mk(def), colors[off.side], colors[def.side]);
+      for (const e of fresh) if (isShot(e) && (filter === 'all' || String(e.side) === filter)) App.courtAddShot('lv-viz', e, colors[e.side]);
+    }
+    // 하이라이트
+    const hl = HL.analyze(plays, nameOf, s => teams[s].abbr);
+    lv.hl = hl;
+    if (hl.length > lv.hlSeen) {
+      const nw = hl.slice(lv.hlSeen).filter(h => h.sc >= 3).pop();
+      lv.hlSeen = hl.length;
+      if (nw && !lv.finished) App.courtBanner('lv-viz', `🔥 ${nw.cap}`, colors[nw.def ? 1 - nw.e.side : nw.e.side]);
+    }
+    const list = document.getElementById('lv-hl');
+    if (list) list.innerHTML = hlList(HL.top(hl, 12), teams, 'liveHl');
+    const fs = document.getElementById('lv-shotstat');
+    if (fs) {
+      const st = side => { const s = plays.filter(e => e.t === 'shot' && !e.fouled && e.side === side); const m = s.filter(e => e.made).length; return `${teams[side].abbr} ${m}/${s.length}`; };
+      fs.innerHTML = `<span style="color:${colors[0]}">●</span> ${esc(st(0))} · <span style="color:${colors[1]}">●</span> ${esc(st(1))}`;
+    }
+  };
+  function hlList(list, teams, act) {
+    if (!list.length) return '<div class="small muted">아직 하이라이트가 없습니다.</div>';
+    return list.map((h, k) => {
+      const e = h.e || h;
+      const t = teams[h.def ? 1 - e.side : e.side];
+      return `<button class="hl-item" data-act="${act}" data-k="${k}"><span class="tchip" style="${App.tstyle(t)}">${esc(t.abbr)}</span><span class="small muted num">${e.q <= 4 ? e.q + 'Q' : 'OT'} ${Math.floor(e.clock / 60)}:${String(e.clock % 60).padStart(2, '0')}</span><span>${esc(h.cap)}</span><span class="small faint num">${e.score ? e.score.join('-') : ''}</span></button>`;
+    }).join('');
+  }
+  App.hlList = hlList;
+  // 하이라이트 한 장면 다시 보기
+  async function replay(id, h, teams) {
+    const e = h.e || h;
+    const colors = vizColors(teams);
+    App.courtBanner(id, `▶ ${h.cap}`, colors[h.def ? 1 - e.side : e.side], 1600);
+    if (e.x !== undefined && (e.t === 'shot' || e.t === undefined)) {
+      const shooter = e.pid !== undefined ? [{ pid: e.pid, pos: 'PG', nm: nameOf(e.pid) }] : [];
+      if (shooter.length) App.courtPlayers(id, shooter, [], colors[e.side], colors[1 - e.side]);
+      await App.courtShoot(id, Object.assign({}, e, { made: e.made !== undefined ? !!e.made : true }), colors[e.side], 800);
+    }
+  }
+  A.liveHl = el => { const lv = App.live; const G = G_(); const list = HL.top(lv.hl || [], 12); const h = list[+el.dataset.k]; if (h) { App.pauseLive(); App.liveUpdate(); replay('lv-viz', h, [G.teams[lv.g.h], G.teams[lv.g.a]]); } };
+  A.liveReel = async () => {
+    const lv = App.live; const G = G_(); const list = HL.top(lv.hl || [], 8);
+    App.pauseLive();
+    for (const h of list) { await replay('lv-viz', h, [G.teams[lv.g.h], G.teams[lv.g.a]]); await App.sleep(900); }
+  };
+  A.shotFilter = el => {
+    const lv = App.live; lv.shotFilter = el.value;
+    const G = G_(); const teams = [G.teams[lv.g.h], G.teams[lv.g.a]];
+    App.courtShots('lv-viz', HL.compactShots(lv.game.plays || []), vizColors(teams), el.value);
+  };
+
+  // ---------- 박스스코어(저장된 슛 차트·하이라이트) ----------
+  App.boxCourtHtml = gm => {
+    if (!gm.shots) return '';
+    const G = G_(); const teams = [G.teams[gm.h], G.teams[gm.a]];
+    return `<div class="card" style="margin-top:12px"><h2>슛 차트 · 하이라이트 <span class="r"><select id="boxShotFilter" data-change="boxShotFilter" data-gid="${gm.gid}"><option value="all">두 팀</option><option value="0">${esc(teams[0].abbr)}</option><option value="1">${esc(teams[1].abbr)}</option></select></span></h2>
+      <div class="viz-grid">${App.courtHtml('box-viz')}<div><div class="row" style="margin-bottom:8px"><button class="btn sm pri" data-act="boxReel" data-gid="${gm.gid}">▶ 하이라이트 다시 보기</button><span class="small muted">${(c => `<span style="color:${c[0]}">●</span> ${esc(teams[0].abbr)} · <span style="color:${c[1]}">●</span> ${esc(teams[1].abbr)}`)(vizColors(teams))} · ● 성공 ✕ 실패</span></div><div class="hl-list">${hlList(gm.hl || [], teams, 'boxHl')}</div></div></div></div>`;
+  };
+  App.boxCourtAfter = gm => {
+    if (!gm || !gm.shots || !document.getElementById('box-viz')) return;
+    const G = G_(); const teams = [G.teams[gm.h], G.teams[gm.a]];
+    App.courtShots('box-viz', gm.shots, vizColors(teams));
+  };
+  A.boxShotFilter = el => { const gm = G_().games[+el.dataset.gid]; const G = G_(); const teams = [G.teams[gm.h], G.teams[gm.a]]; App.courtShots('box-viz', gm.shots, vizColors(teams), el.value); };
+  A.boxHl = el => { const gm = G_().games[+(App.route.params[0])]; const G = G_(); const h = (gm.hl || [])[+el.dataset.k]; if (h) replay('box-viz', h, [G.teams[gm.h], G.teams[gm.a]]); };
+  A.boxReel = async el => {
+    const gm = G_().games[+el.dataset.gid]; const G = G_(); const teams = [G.teams[gm.h], G.teams[gm.a]];
+    for (const h of (gm.hl || [])) { await replay('box-viz', h, teams); await App.sleep(900); }
+    App.courtShots('box-viz', gm.shots, vizColors(teams));
   };
 })();
 

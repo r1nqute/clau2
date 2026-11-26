@@ -36,6 +36,9 @@
   // 무작위 성장
   function randomDevelop(G, p, age) {
     let d = ageCurve(age);
+    // 시즌 중에 이미 자란 몫(자연 성장)은 빼서 두 번 오르지 않게 한다
+    const nat = p.natGain || 0;
+    void nat;
     if (age >= 29 && HM.Train && HM.Train.isTrainee(G, p.pid)) d += 0.8; // 유지 훈련
     const gap = p.pa - p.ovr;
     if (age <= 25 && gap > 0) d += gap * (age <= 21 ? 0.22 : 0.17);
@@ -43,6 +46,7 @@
     if (gap <= 0 && d > 0) d *= 0.3;
     d += (p.a.wrk - 60) / 40;
     d += U.gauss(0, age <= 24 ? 2.6 : 2.0);
+    if (nat > 0) { d -= nat * 0.8; if (age <= 25) d = Math.max(d, 0); }
     shiftOvr(p, d, age);
     if (age >= 27) p.pa = Math.max(p.ovr, p.pa - 1.5);
   }
@@ -61,6 +65,39 @@
       P.update(p);
     }
     if (HM.Train) HM.Train.applyBonus(p, age);
+  }
+
+  // 시즌 중 자연 성장(매주): 젊은 선수가 잠재력 쪽으로 조금씩 자란다.
+  // 실제 커리어 모드에서 다음 시즌 실제 기록이 있으면 그 수준이 목표가 된다.
+  function naturalTick(G) {
+    const y = G.season, d = D();
+    for (const p of Object.values(G.players)) {
+      if (p.tid < 0) continue;
+      const age = P.age(p, y);
+      if (age > 27) continue;
+      let target = p.pa;
+      if (G.settings.prog === 'real' && p.rid && y + 1 <= d.last) {
+        const s = L.snapAt(p.rid, y + 1);
+        if (s) { const x = L.decodeSnap(s); target = Math.min(p.pa, R.ovr(x.a, x.t) + (p.dev || 0)); }
+      }
+      const gap = target - p.ovr;
+      if (gap <= 0.3) continue;
+      const ls = p.stats.filter(l => l.s === y && !l.po);
+      const gp = ls.reduce((s, l) => s + l.gp, 0), mins = ls.reduce((s, l) => s + l.min, 0);
+      const mf = U.clamp(0.75 + (gp ? mins / gp : 0) / 60, 0.75, 1.3);
+      const af = age <= 22 ? 1.2 : age <= 25 ? 1.0 : 0.6;
+      const dOvr = gap * 0.012 * af * mf * (0.7 + p.a.wrk / 200);
+      // 작은 몫은 모아 두었다가 0.3 이상이 되면 한꺼번에 반영한다
+      p.natAcc = (p.natAcc || 0) + dOvr;
+      if (p.natAcc < 0.3) continue;
+      const step = Math.min(p.natAcc, gap);
+      p.natAcc = 0;
+      const pa = p.pa, before = p.ovr;
+      const diff = R.ovrToBpm(Math.min(99, p.ovr + step)) - (p.o + p.d);
+      R.fitTo(p.a, p.t, p.o + diff * 0.68, p.d + diff * 0.32);
+      P.update(p); p.pa = Math.max(pa, p.ovr);
+      p.natGain = (p.natGain || 0) + Math.max(0, p.ovr - before);
+    }
   }
 
   // 새 시즌 직전: 모든 선수 성장/노쇠
@@ -85,6 +122,7 @@
         }
       }
       if (!done) randomDevelop(G, p, age);
+      p.natGain = 0; p.natAcc = 0;
       if (p.stats.some(l => l.s === y - 1 && l.gp > 0)) p.yearsPro = (p.yearsPro || 0) + 1;
     }
   }
@@ -165,5 +203,5 @@
     return delta;
   }
 
-  HM.Prog = { developAll, retirements, injectEntrants, randomDevelop, shiftOvr, ageCurve, normalize, measure };
+  HM.Prog = { naturalTick, developAll, retirements, injectEntrants, randomDevelop, shiftOvr, ageCurve, normalize, measure };
 })();
