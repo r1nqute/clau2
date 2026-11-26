@@ -313,6 +313,15 @@ svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stro
 @media (max-width: 860px) { .viz-grid { grid-template-columns: 1fr; } .hl-list { max-height: 260px; } }
 @media (prefers-reduced-motion: reduce) { svg.court .pd { transition: none; } .hl-banner.show, svg.court .rimfx.pop { animation: none; } }
 
+/* 주전 라인업 */
+.lu-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 16px; align-items: start; }
+.lu-slots { display: grid; gap: 8px; }
+.lu-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.lu-row select { width: 100%; min-width: 0; }
+.lu-pos { display: flex; flex-direction: column; line-height: 1.2; }
+.lu-pos b { font-size: 16px; }
+@media (max-width: 700px) { .lu-grid { grid-template-columns: 1fr; } .lu-grid .court-wrap { max-width: 340px; width: 100%; margin: 0 auto; } .lu-row { grid-template-columns: 54px minmax(0, 1fr) auto; } .lu-pos .small { display: none; } }
+
 </style>
 </head>
 <body>
@@ -618,21 +627,27 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   const TEMPLATE_PO = [39, 37, 35, 33, 31, 23, 18, 14, 10, 0, 0, 0, 0, 0, 0];
 
   // 자동 로테이션: 선발 5명과 출전 시간 목표
-  function autoRotation(players, playoffs) {
+  // fixed: 사용자가 고정한 선발(빈 자리는 코치가 채운다)
+  function autoRotation(players, playoffs, fixed) {
     const list = players.slice().sort((a, b) => b.ovr - a.ovr);
-    const top = list.slice(0, Math.min(7, list.length));
+    const fx = (fixed || []).map(id => list.find(p => p.pid === id)).filter(Boolean).slice(0, 5);
+    const top = list.filter(p => !fx.includes(p)).slice(0, Math.min(7, list.length));
+    const need = Math.min(5 - fx.length, top.length);
     let best = null, bestScore = -1e9;
-    const n = top.length;
-    if (n >= 5) {
-      for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++) for (let d = c + 1; d < n; d++) for (let e = d + 1; e < n; e++) {
-        const five = [top[a], top[b], top[c], top[d], top[e]];
-        let s = five.reduce((x, p) => x + p.ovr, 0);
-        const guards = five.filter(p => p.pos === 'PG' || p.pos === 'SG' || p.a.hdl >= 72).length;
-        const bigs = five.filter(p => p.pos === 'C' || p.pos === 'PF' || p.hgt >= 208).length;
-        if (guards < 1) s -= 8; if (bigs < 1) s -= 8; if (bigs > 3) s -= 5; if (guards > 3) s -= 4;
-        if (s > bestScore) { bestScore = s; best = five; }
-      }
-    } else best = top;
+    const lineScore = five => {
+      let s = five.reduce((x, p) => x + p.ovr, 0);
+      const guards = five.filter(p => p.pos === 'PG' || p.pos === 'SG' || p.a.hdl >= 72).length;
+      const bigs = five.filter(p => p.pos === 'C' || p.pos === 'PF' || p.hgt >= 208).length;
+      if (guards < 1) s -= 8; if (bigs < 1) s -= 8; if (bigs > 3) s -= 5; if (guards > 3) s -= 4;
+      return s;
+    };
+    const pickN = (from, k, acc) => {
+      if (acc.length === k) { const five = fx.concat(acc); const s = lineScore(five); if (s > bestScore) { bestScore = s; best = five; } return; }
+      for (let i = from; i < top.length; i++) { acc.push(top[i]); pickN(i + 1, k, acc); acc.pop(); }
+    };
+    pickN(0, need, []);
+    if (!best) best = fx.concat(top.slice(0, need));
+    best = best.slice().sort((a, b) => b.ovr - a.ovr);
     const starters = best.map(p => p.pid);
     const order = best.slice().concat(list.filter(p => !starters.includes(p.pid)));
     const tpl = playoffs ? TEMPLATE_PO : TEMPLATE;
@@ -721,21 +736,26 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       let rot = src.rotation;
       const ids = new Set(avail.map(p => p.pid));
       let starters, minutes;
+      // 사용자가 고정한 선발(출전 시간은 코치 자동이어도 선발은 지킨다)
+      const fixed = rot && rot.starters && (rot.fix || !rot.auto) ? rot.starters.filter(id => id != null && ids.has(id)) : null;
       if (!rot || rot.auto || !rot.starters) {
-        ({ starters, minutes } = autoRotation(avail, this.playoffs));
+        ({ starters, minutes } = autoRotation(avail, this.playoffs, rot && rot.fix ? fixed : null));
       } else {
-        starters = rot.starters.filter(id => ids.has(id));
+        starters = fixed.slice();
         minutes = {};
         let tot = 0;
         for (const p of avail) { minutes[p.pid] = rot.minutes?.[p.pid] ?? 0; tot += minutes[p.pid]; }
-        const auto = autoRotation(avail, this.playoffs);
+        const auto = autoRotation(avail, this.playoffs, fixed);
         if (starters.length < 5) for (const id of auto.starters) if (starters.length < 5 && !starters.includes(id)) starters.push(id);
         if (tot < 200) for (const id in auto.minutes) minutes[id] = Math.max(minutes[id] || 0, auto.minutes[id] * (240 - tot) / 240);
         const sum = Object.values(minutes).reduce((a, b) => a + b, 0) || 1;
         for (const id in minutes) minutes[id] = minutes[id] * 240 / sum;
       }
+      // 선발 자리(PG~C)를 정해 두었으면 그 자리로 매치업을 짠다
+      const slotPos = {};
+      if (fixed && rot.slots) rot.starters.forEach((id, i) => { if (id != null && i < 5) slotPos[id] = R.POS[i]; });
       const roster = avail.map(p => ({
-        p, side, nm: p.name, min: 0, energy: 1, fouls: 0, out: false, onCourt: false, starter: starters.includes(p.pid),
+        p, side, nm: p.name, pp: slotPos[p.pid] || p.pos, min: 0, energy: 1, fouls: 0, out: false, onCourt: false, starter: starters.includes(p.pid),
         target: minutes[p.pid] || 0,
         s: { pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pm: 0 },
       }));
@@ -900,8 +920,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     // 슛을 고르는 사람과 슛 종류, 기대값 계산에 쓰는 표
     shotTable(off, def) {
       const O = off.court, D = def.court;
-      const So = O.slice().sort((a, b) => POSN[a.p.pos] - POSN[b.p.pos]);
-      const Sd = D.slice().sort((a, b) => POSN[a.p.pos] - POSN[b.p.pos]);
+      const So = O.slice().sort((a, b) => POSN[a.pp] - POSN[b.pp]);
+      const Sd = D.slice().sort((a, b) => POSN[a.pp] - POSN[b.pp]);
       const bestRim = D.reduce((m, r) => Math.max(m, r.p.a.idef), 0);
       const e = this.env;
       const tpBase = e.tpp > 0 ? e.tpp : 0.30;
@@ -1689,7 +1709,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   function realDevelop(G, p, s, age) {
     const x = L.decodeSnap(s);
     p.dev = 0.55 * (p.dev || 0) + U.gauss(0, 1.4);
-    p.a = x.a; p.t = x.t; p.pos = x.pos;
+    p.a = x.a; p.t = x.t; if (!p.posUser) p.pos = x.pos;
     // 바깥 쪽에서 쌓인 경험(정신 능력)은 줄지 않는다
     P.update(p);
     if (Math.abs(p.dev) > 0.05) {
@@ -1942,7 +1962,12 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     for (const id of o.bp) { G.players[id].tid = o.a; G.players[id].morale = 55; }
     for (const id of o.ak) G.picks.find(x => x.id === id).tid = o.b;
     for (const id of o.bk) G.picks.find(x => x.id === id).tid = o.a;
-    for (const t of [o.a, o.b]) { const tm = G.teams[t]; if (tm.rotation && !tm.rotation.auto) tm.rotation = { auto: true, starters: [], minutes: {} }; }
+    // 떠난 선수만 선발·출전 시간에서 빼고, 나머지 설정은 그대로 둔다
+    for (const [t, gone] of [[o.a, o.ap], [o.b, o.bp]]) {
+      const r = G.teams[t].rotation; if (!r || !r.starters) continue;
+      r.starters = r.starters.map(id => gone.includes(id) ? null : id);
+      if (r.minutes) for (const id of gone) delete r.minutes[id];
+    }
     if (!G.tradeLog) G.tradeLog = [];
     G.tradeLog.push({ date: G.date, season: G.season, o: U.deepCopy(o) });
   }
@@ -2303,12 +2328,13 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   function rotation(G, tid) {
     const ps = L.roster(G, tid).filter(p => !(p.injury && p.injury.days > 0));
     const t = G.teams[tid];
-    if (tid === G.userTid && t.rotation && !t.rotation.auto && t.rotation.starters && t.rotation.starters.length) {
+    const fixed = tid === G.userTid && HM.Lineup ? HM.Lineup.fixedIds(G, tid) : null;
+    if (fixed && !t.rotation.auto) {
       const minutes = {};
       for (const p of ps) minutes[p.pid] = +t.rotation.minutes[p.pid] || 0;
-      return { ps, minutes, starters: t.rotation.starters.filter(id => ps.some(p => p.pid === id)) };
+      return { ps, minutes, starters: fixed };
     }
-    const r = Sim.autoRotation(ps, G.phase === 'playoffs');
+    const r = Sim.autoRotation(ps, G.phase === 'playoffs', fixed);
     return { ps, minutes: r.minutes, starters: r.starters };
   }
   function starters(G, tid) {
@@ -2663,6 +2689,220 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
 
 </script>
 <script>
+// 주전 라인업(PG~C 다섯 자리)과 포지션 적합도·포지션 변경 제안
+(function () {
+  const HM = globalThis.HM;
+  const U = HM.U, L = HM.L, Sim = HM.Sim, R = HM.Ratings;
+  const POS = R.POS;
+  const POSN = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+
+  // ---------- 라인업 ----------
+  // 다섯 명을 PG~C 자리에 놓는다: 원래 포지션에서 가장 덜 벗어나게(같으면 키 순)
+  function slotOrder(players) {
+    const ps = players.filter(Boolean).slice(0, 5);
+    const slots = [null, null, null, null, null];
+    if (!ps.length) return slots;
+    let best = null, bestCost = 1e9;
+    const idx = [0, 1, 2, 3, 4];
+    const perm = (arr, k) => {
+      if (k === ps.length) {
+        let c = 0;
+        for (let i = 0; i < ps.length; i++) c += Math.abs((POSN[ps[i].pos] ?? 2) - arr[i]) * 10 + Math.abs((ps[i].hgt - 180) / 8 - arr[i]) * 0.1;
+        if (c < bestCost) { bestCost = c; best = arr.slice(0, ps.length); }
+        return;
+      }
+      for (let i = k; i < arr.length; i++) { [arr[k], arr[i]] = [arr[i], arr[k]]; perm(arr, k + 1); [arr[k], arr[i]] = [arr[i], arr[k]]; }
+    };
+    perm(idx.slice(), 0);
+    ps.forEach((p, i) => { slots[best[i]] = p; });
+    return slots;
+  }
+  function rot(G, tid = G.userTid) {
+    const t = G.teams[tid];
+    if (!t.rotation) t.rotation = { auto: true, starters: [], minutes: {} };
+    return t.rotation;
+  }
+  const healthy = (G, tid) => L.roster(G, tid).filter(p => !(p.injury && p.injury.days > 0));
+  const isFixed = r => !!(r && r.starters && r.starters.some(x => x != null) && (r.fix || !r.auto));
+  // 사용자가 고정한 선발(경기에 나설 수 있는 선수만)
+  function fixedIds(G, tid = G.userTid) {
+    const r = rot(G, tid);
+    if (!isFixed(r)) return null;
+    const ok = new Set(healthy(G, tid).map(p => p.pid));
+    return r.starters.filter(id => id != null && ok.has(id));
+  }
+  // 지금의 다섯 자리: { slots: [pid|null ×5], fixed }
+  function lineup(G, tid = G.userTid) {
+    const r = rot(G, tid);
+    const mine = new Set(L.roster(G, tid).map(p => p.pid));
+    if (isFixed(r)) {
+      if (!r.slots) { // 예전 저장(자리 순서가 없는 선발 목록) → 자리 순서로
+        r.starters = slotOrder(r.starters.map(id => G.players[id]).filter(p => p && mine.has(p.pid))).map(p => p ? p.pid : null);
+        r.slots = true; r.fix = true;
+      }
+      return { slots: POS.map((_, i) => { const id = r.starters[i]; return id != null && mine.has(id) ? id : null; }), fixed: true };
+    }
+    const a = Sim.autoRotation(healthy(G, tid), G.phase === 'playoffs');
+    return { slots: slotOrder(a.starters.map(id => G.players[id])).map(p => p ? p.pid : null), fixed: false };
+  }
+  // i번 자리에 선수를 넣는다(이미 다른 자리면 맞바꾼다). pid가 null이면 비운다(코치가 채움).
+  function setSlot(G, i, pid) {
+    const r = rot(G);
+    const cur = lineup(G).slots;
+    const prev = cur[i];
+    if (pid != null) { const j = cur.indexOf(pid); if (j >= 0 && j !== i) cur[j] = prev; }
+    cur[i] = pid;
+    // 직접 정한 출전 시간이면 새 선발과 빠진 선수의 시간을 맞바꾼다
+    if (!r.auto && r.minutes && pid != null && prev != null && !cur.includes(prev)) {
+      const a = +r.minutes[pid] || 0, b = +r.minutes[prev] || 0;
+      if (b > a) { r.minutes[pid] = b; r.minutes[prev] = a; }
+    }
+    r.starters = cur; r.slots = true; r.fix = true;
+  }
+  function benchPlayer(G, pid) { const i = lineup(G).slots.indexOf(pid); if (i >= 0) setSlot(G, i, null); }
+  function resetLineup(G) {
+    const r = rot(G);
+    r.fix = false;
+    if (r.auto) r.starters = [];
+    else { r.fix = true; r.slots = true; const a = Sim.autoRotation(healthy(G, G.userTid), G.phase === 'playoffs'); r.starters = slotOrder(a.starters.map(id => G.players[id])).map(p => p ? p.pid : null); }
+  }
+  // 경기에서 이 선수가 맡는 자리(선발로 지정된 자리, 아니면 원래 포지션)
+  function slotPos(G, tid = G.userTid) {
+    const r = rot(G, tid); const o = {};
+    if (isFixed(r) && r.slots) r.starters.forEach((id, i) => { if (id != null && i < 5) o[id] = POS[i]; });
+    return o;
+  }
+
+  // ---------- 포지션 적합도 ----------
+  // [키, 이름, 값 함수, 가중치, 기록 여부]
+  const FEAT = [
+    ['hgt', '키', p => p.hgt, 1.6],
+    ['pss', '패스', p => p.a.pss, 1.0],
+    ['hdl', '볼 핸들링', p => p.a.hdl, 1.0],
+    ['tp', '3점 슛', p => p.a.tp, 0.6],
+    ['ins', '골밑 마무리', p => p.a.ins, 0.5],
+    ['reb', '리바운드', p => (p.a.drb + p.a.orb) / 2, 1.0],
+    ['blk', '블록', p => p.a.blk, 0.8],
+    ['idef', '골밑 수비', p => p.a.idef, 0.7],
+    ['pdef', '외곽 수비', p => p.a.pdef, 0.5],
+    ['spd', '스피드', p => p.a.spd, 0.6],
+    ['str', '근력', p => p.a.str, 0.6],
+    ['ast36', '36분당 어시스트', (p, s) => s ? s.ast * 36 / s.min : null, 1.3, true],
+    ['reb36', '36분당 리바운드', (p, s) => s ? (s.orb + s.drb) * 36 / s.min : null, 1.2, true],
+    ['blk36', '36분당 블록', (p, s) => s ? s.blk * 36 / s.min : null, 0.7, true],
+    ['tpa36', '36분당 3점 시도', (p, s) => s ? s.tpa * 36 / s.min : null, 0.8, true],
+  ];
+  const MIN_MIN = 250; // 기록을 믿을 만한 최소 출전 시간
+  // 이번 시즌 정규리그 합계(여러 팀 합산)
+  function seasonStat(p, y) {
+    const ls = (p.stats || []).filter(l => l.s === y && !l.po);
+    if (!ls.length) return null;
+    const o = { gp: 0, min: 0, ast: 0, orb: 0, drb: 0, blk: 0, tpa: 0 };
+    for (const l of ls) for (const k in o) o[k] += l[k] || 0;
+    return o;
+  }
+  let cache = null;
+  // 리그 전체 선수로 포지션별 평균과 전체 표준편차를 만든다
+  function model(G) {
+    const key = G.season + '|' + G.date;
+    if (cache && cache.key === key && cache.G === G) return cache.m;
+    const ps = Object.values(G.players).filter(p => p.tid >= 0 && POSN[p.pos] !== undefined);
+    const m = { mu: {}, sd: {} };
+    FEAT.forEach(([k, , f, , st]) => {
+      const vals = [], byPos = { PG: [], SG: [], SF: [], PF: [], C: [] };
+      for (const p of ps) {
+        const s = st ? seasonStat(p, G.season) : null;
+        if (st && (!s || s.min < MIN_MIN)) continue;
+        const v = f(p, s);
+        if (v == null || !isFinite(v)) continue;
+        vals.push(v); byPos[p.pos].push(v);
+      }
+      if (vals.length < 30 || POS.some(x => byPos[x].length < 5)) return; // 기록이 아직 모자라면 이 항목은 뺀다
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      m.sd[k] = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length) || 1;
+      m.mu[k] = Object.fromEntries(POS.map(x => [x, byPos[x].reduce((a, b) => a + b, 0) / byPos[x].length]));
+    });
+    cache = { key, G, m };
+    return m;
+  }
+  // 선수의 포지션별 거리와 적합도(0~100)
+  function fit(G, p) {
+    const m = model(G);
+    const s = seasonStat(p, G.season);
+    const st = s && s.min >= MIN_MIN ? s : null;
+    const xs = {};
+    for (const [k, , f, , isSt] of FEAT) { if (!m.mu[k]) continue; const v = f(p, isSt ? st : null); if (v != null && isFinite(v)) xs[k] = v; }
+    const d = {};
+    for (const pos of POS) {
+      let sw = 0, acc = 0;
+      for (const [k, , , w] of FEAT) { if (xs[k] === undefined) continue; const z = (xs[k] - m.mu[k][pos]) / m.sd[k]; acc += w * z * z; sw += w; }
+      d[pos] = Math.sqrt(acc / (sw || 1));
+    }
+    const dmin = Math.min(...POS.map(x => d[x]));
+    const score = Object.fromEntries(POS.map(x => [x, Math.round(100 * Math.exp(-(d[x] - dmin) * 1.6) * U.clamp(1.15 - dmin * 0.25, 0.6, 1))]));
+    const rank = POS.map(pos => ({ pos, d: d[pos], score: score[pos] })).sort((a, b) => a.d - b.d);
+    return { d, score, rank, xs, stats: !!st, m };
+  }
+  // 왜 다른 포지션이 더 맞는지: 두 포지션 평균 중 새 쪽에 더 가까운 항목
+  function reasons(G, p, from, to, f = fit(G, p)) {
+    const out = [];
+    for (const [k, label, , w, isSt] of FEAT) {
+      if (f.xs[k] === undefined) continue;
+      const x = f.xs[k], a = f.m.mu[k][from], b = f.m.mu[k][to], sd = f.m.sd[k];
+      const gain = w * (((x - a) / sd) ** 2 - ((x - b) / sd) ** 2);
+      if (gain > 0.05) out.push({ k, label, x, a, b, gain, isSt });
+    }
+    const fmt = (k, v, isSt) => k === 'hgt' ? Math.round(v) + 'cm' : isSt ? v.toFixed(1) : String(R.disp(v));
+    return out.sort((u, v) => v.gain - u.gain).slice(0, 4).map(r => ({ ...r, txt: `${r.label} <b>${fmt(r.k, r.x, r.isSt)}</b> <span class="muted">(${to} 평균 ${fmt(r.k, r.b, r.isSt)} · ${from} 평균 ${fmt(r.k, r.a, r.isSt)})</span>` }));
+  }
+
+  // ---------- 포지션 변경 제안(매주 월요일, 우리 선수) ----------
+  const GAP = 0.15; // 지금 포지션보다 이만큼 더 가까워야 제안한다
+  function candidates(G, tid = G.userTid) {
+    const y = G.season, out = [];
+    for (const p of L.roster(G, tid)) {
+      const s = seasonStat(p, y);
+      if (!s || s.gp < 12 || s.min < 300) continue;
+      const f = fit(G, p);
+      if (!f.stats) continue;
+      const best = f.rank[0];
+      if (best.pos === p.pos) continue;
+      const gap = f.d[p.pos] - best.d;
+      // 옆 포지션으로는 쉽게, 멀리 옮기는 건 차이가 아주 클 때만
+      if (gap < (Math.abs(POSN[best.pos] - POSN[p.pos]) === 1 ? GAP : GAP * 3)) continue;
+      out.push({ p, from: p.pos, to: best.pos, gap, f });
+    }
+    return out.sort((a, b) => b.gap - a.gap);
+  }
+  function posCheck(G) {
+    const S = HM.Season;
+    if (G.phase !== 'regular' || !S.autoSet(G).posSugg) return null;
+    const c = candidates(G).find(x => x.p.posAsk !== G.season);
+    if (!c) return null;
+    const { p, from, to, f } = c;
+    p.posAsk = G.season;
+    const why = reasons(G, p, from, to, f);
+    const KO = R.POS_KO;
+    const fitTxt = f.rank.map(r => `${r.pos} ${r.score}`).join(' · ');
+    S.msg(G, `포지션 변경 제안: ${p.name} (${from} → ${to})`,
+      `<p>수석 코치: 이번 시즌 기록과 능력치를 보면 <b>${U.esc(p.name)}</b>은(는) ${KO[from]}(${from})보다 <b>${KO[to]}(${to})</b>에 더 잘 맞습니다.</p>
+      ${why.length ? `<ul>${why.map(r => `<li>${r.txt}</li>`).join('')}</ul>` : ''}
+      <p class="small muted">포지션 적합도: ${fitTxt}</p>
+      <p class="small muted">포지션은 경기에서 누구를 막는지(매치업), 코치의 선발·교체 구성, 매니저 모드의 포지션 진단에 쓰입니다. 능력치는 바뀌지 않습니다. 주전 라인업에서 자리만 바꿔 써 볼 수도 있습니다.</p>`,
+      { type: 'pos', pid: p.pid, from, to });
+    return c;
+  }
+  // 포지션 바꾸기(사용자가 정한 포지션은 실제 커리어 모드에서도 유지)
+  function setPos(G, p, pos) {
+    if (!POS.includes(pos)) return;
+    p.pos = pos; p.posUser = true; p.posAsk = G.season;
+  }
+
+  HM.Lineup = { slotOrder, lineup, setSlot, benchPlayer, resetLineup, fixedIds, slotPos, isFixed, fit, reasons, candidates, posCheck, setPos, seasonStat, FEAT, GAP };
+})();
+
+</script>
+<script>
 // 시즌 진행: 일정, 경기 기록, 순위, 플레이인·플레이오프, 시상, 드래프트, 오프시즌
 (function () {
   const HM = globalThis.HM = globalThis.HM || {};
@@ -2670,7 +2910,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   const D = () => globalThis.HM_DATA;
 
   // ---------- 자동 진행(턴 끄기) 설정 ----------
-  const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true, watchStop: true, draftFirst: 'round1' };
+  const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true, watchStop: true, draftFirst: 'round1', posSugg: true };
   // 매니저 모드 설정
   function mgrSet(G) {
     G.settings.mgr = Object.assign({ on: true, live: true, auto: false, report: true }, G.settings.mgr || {});
@@ -3501,7 +3741,10 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     if (r !== 'wait' && r !== 'roster') {
       scanFA(G); if (HM.Train) HM.Train.tick(G);
       // 자연 성장은 시즌 중 매주 월요일
-      if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) Prog.naturalTick(G);
+      if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) {
+        Prog.naturalTick(G);
+        if (HM.Lineup) HM.Lineup.posCheck(G); // 포지션 변경 제안
+      }
     }
     return r;
   }
@@ -4371,7 +4614,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   const D = () => globalThis.HM_DATA;
   const G_ = () => App.G;
 
-  const ICON = { info: 'ℹ️', board: '🏛️', injury: '🩹', season: '🏀', award: '🏅', draft: '🎓', contract: '✍️', offer: '🔄', complaint: '😠', champ: '🏆', scout: '🔔', coach: '🧠', train: '🏋️' };
+  const ICON = { info: 'ℹ️', board: '🏛️', injury: '🩹', season: '🏀', award: '🏅', draft: '🎓', contract: '✍️', offer: '🔄', complaint: '😠', champ: '🏆', scout: '🔔', coach: '🧠', train: '🏋️', pos: '🔀' };
 
   // ---------- 홈 ----------
   S.home = () => {
@@ -4454,6 +4697,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       const still = sel.pids.map(id => G.players[id]).filter(p => p && p.tid === -1);
       actions += still.length ? `<div class="row" style="margin-top:14px">${still.map(p => `<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">${esc(p.name)} 협상</button>`).join('')}<button class="btn" data-act="scoutGo" data-id="${sel.id}">자유계약 화면에서 보기</button></div>` : `<div class="note" style="margin-top:12px">이 선수들은 이미 시장을 떠났습니다: ${sel.pids.map(id => G.players[id]).filter(Boolean).map(p => `${esc(p.name)} → ${p.tid >= 0 ? esc(G.teams[p.tid].ko) : p.tid === -3 ? '은퇴' : '시장 밖'}`).join(', ')}</div>`;
     }
+    if (sel && sel.type === 'pos' && App.posMsgActs) actions += App.posMsgActs(sel);
     if (sel && sel.pid && G.players[sel.pid]) actions += `<div style="margin-top:12px"><a class="btn" href="#/player/${sel.pid}">선수 정보</a></div>`;
     return `<h1>받은 편지함</h1>
     <div class="inbox">
@@ -4578,7 +4822,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const tab = opt.tab || 'ov';
     const po = opt.po || 0;
     const base = [
-      { k: 'name', label: '이름', f: p => `${App.plink(p)} ${App.trainTag ? App.trainTag(p) : ''} ${App.injTag(p)}`, v: p => p.name },
+      { k: 'name', label: '이름', f: p => `${opt.own && App.starterSlot && App.starterSlot(p.pid) >= 0 ? '<span title="주전">⭐</span> ' : ''}${App.plink(p)} ${App.trainTag ? App.trainTag(p) : ''} ${App.injTag(p)}`, v: p => p.name },
       { k: 'pos', label: '포지션', cls: 'c' },
       { k: 'age', label: '나이', cls: 'r', v: p => App.age(p), f: p => App.age(p) },
     ];
@@ -4637,7 +4881,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const ps = L.roster(G, G.userTid);
     const pay = F.payroll(G, G.userTid, AI.capYear(G));
     const tabs = [['ov', '개요'], ['attr', '능력치'], ['stats', '시즌 기록'], ['con', '계약']];
-    return `<div class="row"><h1>선수단</h1><span class="sp"></span><span class="pill">${ps.length}/15명</span><span class="pill">연봉 ${U.money(pay)} / 캡 ${U.money(F.cap(AI.capYear(G)))}</span></div>
+    return `<div class="row"><h1>선수단</h1><span class="sp"></span><a class="btn sm" href="#/tactics">⭐ 주전 라인업</a><span class="pill">${ps.length}/15명</span><span class="pill">연봉 ${U.money(pay)} / 캡 ${U.money(F.cap(AI.capYear(G)))}</span></div>
       <div class="tabs">${tabs.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="tab" data-group="squad" data-tab="${k}">${l}</button>`).join('')}
       ${tab === 'stats' ? `<span class="sp"></span><button class="${po ? '' : 'on'}" data-act="tab" data-group="squadPo" data-tab="0">정규</button><button class="${po ? 'on' : ''}" data-act="tab" data-group="squadPo" data-tab="1">플레이오프</button>` : ''}</div>
       <div class="card flat" style="padding:6px">${App.rosterTable('squad-' + tab, ps, { tab, po, own: true })}</div>
@@ -4698,6 +4942,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       const ts = HM.Train && HM.Train.slotOf(G, p.pid);
       acts.push(`<button class="btn ${ts ? '' : 'pri'}" data-act="trToggle" data-pid="${p.pid}">${ts ? '🏋️ 집중 훈련 해제' : '🏋️ 집중 훈련 시키기'}</button>`);
       if (ts) acts.push(`<a class="btn" href="#/training">훈련: ${HM.Train.FOCUS[ts.focus][0]}(${HM.Train.INT[ts.int][0]})</a>`);
+      if (App.lineupActs) acts.push(...App.lineupActs(p));
       acts.push(`<button class="btn" data-act="tradeWith" data-pid="${p.pid}">트레이드 블록에</button>`);
       if (G.phase === 'resign' && p.contract && p.contract.exp <= G.season) acts.push(`<button class="btn pri" data-act="negotiate" data-pid="${p.pid}">재계약 협상</button>`);
       acts.push(`<button class="btn danger" data-act="release" data-pid="${p.pid}">방출</button>`);
@@ -4713,7 +4958,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
           <h1>${esc(p.name)} ${p.hof ? '<span class="pill warn" title="실제 명예의 전당 헌액자">HOF</span>' : ''}</h1>
           <div class="sub">${t ? `${App.tchip(t)} ${App.tlink(t)}` : App.tname(p.tid)} · ${R.POS_KO[p.pos]} · ${age}세 · ${p.hgt}cm · ${p.wgt}kg${p.college ? ' · ' + esc(p.college) : ''}</div>
           <div class="sub">${p.draft ? `${p.draft.year} 드래프트 ${p.draft.round}라운드 ${p.draft.pick}순위 (${esc(p.draft.abbr)})` : p.undrafted ? `${p.undrafted} 드래프트 미지명` : '드래프트 정보 없음'} · NBA ${p.yearsPro || 0}년차</div>
-          <div class="row" style="margin-top:6px">${App.injTag(p)} ${p.injury ? `<span class="small muted">${esc(p.injury.type)}</span>` : ''} <span class="pill">사기 ${App.moraleTxt(p.morale ?? 60)}</span> ${p.contract ? `<span class="pill">${App.contractTxt(p)}</span>` : ''}</div>
+          <div class="row" style="margin-top:6px">${App.injTag(p)} ${p.injury ? `<span class="small muted">${esc(p.injury.type)}</span>` : ''} <span class="pill">사기 ${App.moraleTxt(p.morale ?? 60)}</span> ${own && App.starterPill ? App.starterPill(p) : ''} ${p.contract ? `<span class="pill">${App.contractTxt(p)}</span>` : ''}</div>
         </div>
         <div class="row" style="gap:18px">
           <div class="ovrbig"><b>${Math.round(p.ovr)}</b><span>능력</span>${(() => { const d = p.ovr - (p.ovrStart ?? p.ovr); return Math.abs(d) >= 0.5 ? `<div class="small num" style="color:var(${d > 0 ? '--good' : '--bad'})" title="이번 시즌 시작 대비">시즌 ${d > 0 ? '▲' : '▼'}${Math.abs(Math.round(d)) || 1}</div>` : ''; })()}</div>
@@ -4729,6 +4974,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     <div class="grid g3">
       <div class="card span2"><h2>능력치</h2><div class="attrs">${attrs}</div></div>
       <div class="card"><h2>플레이 성향</h2>${tend}
+        ${App.posFitHtml && p.tid !== -3 ? App.posFitHtml(p) : ''}
         <h2 style="margin-top:14px">공헌도</h2><div class="kv small"><span>공격(BPM 환산)</span><span>${p.o >= 0 ? '+' : ''}${p.o.toFixed(1)}</span><span>수비(BPM 환산)</span><span>${p.d >= 0 ? '+' : ''}${p.d.toFixed(1)}</span></div>
         ${Object.keys(gameAw).length ? `<h2 style="margin-top:14px">게임 속 수상</h2><div class="row">${awHtml(gameAw)}</div>` : ''}
         ${Object.keys(cnt).length ? `<h2 style="margin-top:14px">실제 수상(시작 이전)</h2><div class="row">${awHtml(cnt)}</div>` : ''}
@@ -4756,36 +5002,46 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const group = (key, title) => `<div class="card"><h2>${title}</h2><div class="grid">${TAC[key].map(([v, l, d]) => `<label class="opt"><input type="radio" name="tac-${key}" value="${v}" ${String(tac[key]) === String(v) ? 'checked' : ''} data-change="setTac" data-key="${key}"><span><b>${l}</b><span class="small muted">${d}</span></span></label>`).join('')}</div></div>`;
     const ps = L.roster(G, G.userTid).sort((a, b) => b.ovr - a.ovr);
     const healthy = ps.filter(p => !(p.injury && p.injury.days > 0));
-    const auto = HM.Sim.autoRotation(healthy, G.phase === 'playoffs');
+    const fixedIds = HM.Lineup.fixedIds(G);
+    const auto = HM.Sim.autoRotation(healthy, G.phase === 'playoffs', fixedIds);
+    const isSt = pid => (rot.auto ? auto.starters : (fixedIds || [])).includes(pid);
     let rotHtml;
     if (rot.auto) {
-      rotHtml = `<p class="muted small">코치진이 능력치와 체력에 맞춰 선발과 출전 시간을 정합니다. 아래는 현재 예상 로테이션입니다.</p>` +
-        `<div class="tw"><table class="t"><thead><tr><th>선수</th><th class="c">포지션</th><th class="c">능력</th><th class="r">예상 출전 시간</th></tr></thead><tbody>${healthy.slice().sort((a, b) => (auto.minutes[b.pid] || 0) - (auto.minutes[a.pid] || 0)).map(p => `<tr><td>${auto.starters.includes(p.pid) ? '⭐ ' : ''}${App.plink(p)}</td><td class="c">${p.pos}</td><td class="c">${App.ovr(p.ovr)}</td><td class="r">${(auto.minutes[p.pid] || 0).toFixed(0)}분</td></tr>`).join('')}</tbody></table></div>`;
+      rotHtml = `<p class="muted small">코치진이 능력치와 체력에 맞춰 출전 시간을 정합니다${fixedIds ? '(선발은 위에서 직접 고른 대로)' : '(선발도 코치가 고릅니다)'}. 아래는 현재 예상 로테이션입니다.</p>` +
+        `<div class="tw"><table class="t"><thead><tr><th>선수</th><th class="c">포지션</th><th class="c">능력</th><th class="r">예상 출전 시간</th></tr></thead><tbody>${healthy.slice().sort((a, b) => (auto.minutes[b.pid] || 0) - (auto.minutes[a.pid] || 0)).map(p => `<tr><td>${isSt(p.pid) ? '⭐ ' : ''}${App.plink(p)}</td><td class="c">${p.pos}</td><td class="c">${App.ovr(p.ovr)}</td><td class="r">${(auto.minutes[p.pid] || 0).toFixed(0)}분</td></tr>`).join('')}</tbody></table></div>`;
     } else {
       const total = ps.reduce((s, p) => s + (+rot.minutes[p.pid] || 0), 0);
-      rotHtml = `<p class="muted small">선발 5명을 고르고 경기당 목표 출전 시간(합계 240분)을 정하세요. 체력·파울·점수 차에 따라 실제 시간은 조금 달라집니다. 부상 선수는 자동으로 빠집니다.</p>
-      <div class="row" style="margin-bottom:8px"><span class="pill ${Math.abs(total - 240) <= 2 ? 'good' : 'warn'}">합계 ${total.toFixed(0)}분 / 240분</span><span class="pill">${rot.starters.length}/5 선발</span><span class="sp"></span><button class="btn sm" data-act="rotFill">코치 추천값으로</button><button class="btn sm" data-act="rotNorm">240분에 맞추기</button></div>
+      rotHtml = `<p class="muted small">선발은 위 주전 라인업에서 고르고, 여기서는 경기당 목표 출전 시간(합계 240분)을 정하세요. 체력·파울·점수 차에 따라 실제 시간은 조금 달라집니다. 부상 선수는 자동으로 빠집니다.</p>
+      <div class="row" style="margin-bottom:8px"><span class="pill ${Math.abs(total - 240) <= 2 ? 'good' : 'warn'}">합계 ${total.toFixed(0)}분 / 240분</span><span class="pill">${(fixedIds || []).length}/5 선발</span><span class="sp"></span><button class="btn sm" data-act="rotFill">코치 추천 시간으로</button><button class="btn sm" data-act="rotNorm">240분에 맞추기</button></div>
       <div class="tw"><table class="t"><thead><tr><th>선발</th><th>선수</th><th class="c">포지션</th><th class="c">능력</th><th class="c">지구력</th><th class="r">목표 시간</th></tr></thead><tbody>
-      ${ps.map(p => `<tr><td class="c"><input type="checkbox" data-change="rotStarter" data-pid="${p.pid}" ${rot.starters.includes(p.pid) ? 'checked' : ''}></td><td>${App.plink(p)} ${App.injTag(p)}</td><td class="c">${p.pos}</td><td class="c">${App.ovr(p.ovr)}</td><td class="c"><span class="av ${R.attrClass(R.disp(p.a.sta))}">${R.disp(p.a.sta)}</span></td>
+      ${ps.map(p => `<tr><td class="c">${isSt(p.pid) ? '⭐' : ''}</td><td>${App.plink(p)} ${App.injTag(p)}</td><td class="c">${p.pos}</td><td class="c">${App.ovr(p.ovr)}</td><td class="c"><span class="av ${R.attrClass(R.disp(p.a.sta))}">${R.disp(p.a.sta)}</span></td>
         <td class="r"><input type="number" min="0" max="48" step="1" style="width:70px" value="${Math.round(+rot.minutes[p.pid] || 0)}" data-change="rotMin" data-pid="${p.pid}"></td></tr>`).join('')}
       </tbody></table></div>`;
     }
     return `<h1>전술·로테이션</h1>
     <div class="grid g2">${group('pace', '템포')}${group('focus', '공격 전술')}${group('def', '수비 전술')}${group('reb', '리바운드')}</div>
-    <div class="card" style="margin-top:14px"><h2>로테이션 <span class="r"><label class="row" style="gap:6px"><input type="checkbox" ${rot.auto ? 'checked' : ''} data-change="rotAuto"> 코치에게 맡기기</label></span></h2>${rotHtml}</div>`;
+    ${App.lineupCard ? App.lineupCard() : ''}
+    <div class="card" style="margin-top:14px"><h2>로테이션 <span class="r"><label class="row" style="gap:6px"><input type="checkbox" ${rot.auto ? 'checked' : ''} data-change="rotAuto"> 출전 시간 코치에게 맡기기</label></span></h2>${rotHtml}</div>`;
   };
   A.setTac = el => { const t = G_().teams[G_().userTid]; t.tactics[el.dataset.key] = el.dataset.key === 'pace' ? +el.value : el.value; App.toast('전술을 바꿨습니다'); };
   A.rotAuto = el => {
     const G = G_(), t = G.teams[G.userTid];
-    if (el.checked) t.rotation = { auto: true, starters: [], minutes: {} };
+    const lu = HM.Lineup.lineup(G); // 선발 설정은 출전 시간 방식과 상관없이 유지한다
+    if (el.checked) t.rotation = lu.fixed ? { auto: true, fix: true, slots: true, starters: lu.slots, minutes: {} } : { auto: true, starters: [], minutes: {} };
     else {
       const ps = L.roster(G, G.userTid).filter(p => !(p.injury && p.injury.days > 0));
-      const a = HM.Sim.autoRotation(ps, false);
-      t.rotation = { auto: false, starters: a.starters.slice(), minutes: Object.fromEntries(Object.entries(a.minutes).map(([k, v]) => [k, Math.round(v)])) };
+      const a = HM.Sim.autoRotation(ps, false, lu.slots.filter(x => x != null));
+      t.rotation = { auto: false, fix: true, slots: true, starters: lu.slots, minutes: Object.fromEntries(Object.entries(a.minutes).map(([k, v]) => [k, Math.round(v)])) };
     }
     App.rerender();
   };
-  A.rotFill = () => { const G = G_(); const t = G.teams[G.userTid]; const ps = L.roster(G, G.userTid).filter(p => !(p.injury && p.injury.days > 0)); const a = HM.Sim.autoRotation(ps, false); t.rotation = { auto: false, starters: a.starters.slice(), minutes: Object.fromEntries(Object.entries(a.minutes).map(([k, v]) => [k, Math.round(v)])) }; App.rerender(); };
+  A.rotFill = () => {
+    const G = G_(); const t = G.teams[G.userTid]; const lu = HM.Lineup.lineup(G);
+    const ps = L.roster(G, G.userTid).filter(p => !(p.injury && p.injury.days > 0));
+    const a = HM.Sim.autoRotation(ps, false, lu.slots.filter(x => x != null));
+    t.rotation = { auto: false, fix: true, slots: true, starters: lu.slots, minutes: Object.fromEntries(Object.entries(a.minutes).map(([k, v]) => [k, Math.round(v)])) };
+    App.rerender();
+  };
   A.rotNorm = () => {
     const G = G_(); const rot = G.teams[G.userTid].rotation;
     const tot = Object.values(rot.minutes).reduce((s, v) => s + (+v || 0), 0) || 1;
@@ -5033,6 +5289,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
         ${tog('offers', 'AI 트레이드 제안 받기', '끄면 다른 구단이 제안을 보내지 않습니다.')}
         ${tog('minorInjury', '가벼운 부상 알림', '끄면 7일 이상 결장하는 부상만 알립니다.')}
         <div class="opt" style="display:block"><b>🎟️ 드래프트 우선권</b><div class="row" style="margin-top:6px">${[['round1', '1라운드 1순위'], ['all', '모든 라운드 맨 먼저'], ['off', '끄기(로터리대로)']].map(([v, l]) => `<label class="pill" style="cursor:pointer;padding:5px 10px"><input type="radio" name="auto-draftFirst" value="${v}" ${(A.draftFirst || 'off') === v ? 'checked' : ''} data-change="autoSel" data-k="draftFirst"> ${l}</label>`).join('')}</div><span class="small muted">드래프트 날 우리 팀이 먼저 지명합니다. 지명권이 없으면 하나 받습니다.</span></div>
+        ${tog('posSugg', '포지션 변경 제안', '기록과 능력치가 다른 포지션에 더 맞는 우리 선수가 보이면 수석 코치가 받은 편지함으로 제안합니다(매주 월요일 점검).')}
         ${tog('watchStop', '관심 FA 알림 때 멈추기', '자유계약 화면에서 저장한 조건이나 ★ 관심 선수가 시장에 나오면 진행을 멈춥니다.')}
       </div></div>`;
   };
@@ -5516,7 +5773,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     App.modal(`경기 날 — ${g.h === my ? 'vs' : '@'} ${esc(opp.ko)}`, `
       ${ctx ? `<div class="pill warn" style="margin-bottom:10px">${ctx}</div>` : ''}
       <div class="row" style="align-items:stretch">${side(home)}${side(away)}</div>
-      <div class="note" style="margin-top:12px">우리 전술: <b>${tacTxt}</b> · 로테이션 ${G.teams[my].rotation.auto ? '코치 자동' : '직접 설정'}</div>
+      <div class="note" style="margin-top:12px">우리 전술: <b>${tacTxt}</b> · 출전 시간 ${G.teams[my].rotation.auto ? '코치 자동' : '직접 설정'} · 선발 ${HM.Lineup && HM.Lineup.isFixed(G.teams[my].rotation) ? '직접 지정' : '코치 선택'} <a class="lnk" href="#/tactics">바꾸기</a></div>
       ${Season.mgrSet(G).on && App.matchupHtml ? `<div class="card flat" style="margin-top:12px"><h3>🧠 상대 분석</h3>${App.matchupHtml(opp.tid)}</div>` : ''}`,
       `<button class="btn" data-act="pmTactics">전술 수정</button><button class="btn" data-act="quickGame">결과만 보기</button><button class="btn pri" data-act="liveGame">생중계로 지휘</button>`);
   };
@@ -5787,11 +6044,15 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const place = (list, col, isDef) => {
       const sorted = list.slice().sort((a, b) => (POSN[a.pos] ?? 2) - (POSN[b.pos] ?? 2));
       sorted.forEach((p, i) => {
-        let [x, y] = SLOT[i] || SLOT[0];
+        let [x, y] = SLOT[p.slot ?? i] || SLOT[0];
         if (isDef) { x = x + (RIM.x - x) * 0.22 + 8; y = y + (RIM.y - y) * 0.22; }
-        const gg = el('g', { class: 'pd', 'data-pid': p.pid, transform: `translate(${x},${y})` });
-        gg.appendChild(el('circle', { r: 13, fill: isDef ? 'none' : col, stroke: col, 'stroke-width': isDef ? 3.5 : 2, opacity: isDef ? 0.9 : 1 }));
-        const t = el('text', { y: 27, 'text-anchor': 'middle', class: 'pn' }); t.textContent = p.nm.length > 9 ? p.nm.slice(0, 8) + '…' : p.nm;
+        const gg = el('g', { class: 'pd', 'data-pid': p.pid ?? '', transform: `translate(${x},${y})` });
+        const big = p.slot !== undefined; // 라인업 그림은 크게
+        const rr = big ? 24 : 13;
+        if (p.empty) gg.appendChild(el('circle', { r: rr, fill: 'none', stroke: 'var(--court-line)', 'stroke-width': 2.5, 'stroke-dasharray': '5 4' }));
+        else gg.appendChild(el('circle', { r: rr, fill: isDef ? 'none' : col, stroke: col, 'stroke-width': isDef ? 3.5 : 2, opacity: isDef ? 0.9 : 1 }));
+        if (big) { const lab = el('text', { y: 6, 'text-anchor': 'middle', class: 'pn', style: 'font-size:17px' }); lab.textContent = p.pos; gg.appendChild(lab); }
+        const t = el('text', { y: big ? 44 : 27, 'text-anchor': 'middle', class: 'pn', style: big ? 'font-size:19px' : '' }); t.textContent = p.nm.length > 9 ? p.nm.slice(0, 8) + '…' : p.nm;
         gg.appendChild(t);
         g.appendChild(gg);
       });
@@ -5924,6 +6185,125 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     const gm = G_().games[+el.dataset.gid]; const G = G_(); const teams = [G.teams[gm.h], G.teams[gm.a]];
     for (const h of (gm.hl || [])) { await replay('box-viz', h, teams); await App.sleep(900); }
     App.courtShots('box-viz', gm.shots, vizColors(teams));
+  };
+})();
+
+</script>
+<script>
+// 주전 라인업 카드, 주전 지정·포지션 변경, 포지션 변경 제안 처리
+(function () {
+  const HM = globalThis.HM;
+  const U = HM.U, L = HM.L, R = HM.Ratings, App = HM.App, Lu = HM.Lineup;
+  const esc = U.esc;
+  const A = App.acts;
+  const G_ = () => App.G;
+  const POS = R.POS, KO = R.POS_KO;
+  const fitCls = s => s >= 85 ? 'good' : s >= 60 ? 'warn' : 'bad';
+  const fitCol = s => s >= 85 ? 'var(--good)' : s >= 60 ? 'var(--warn)' : 'var(--bad)';
+  const injured = p => p.injury && p.injury.days > 0;
+
+  // ---------- 전술 화면: 주전 라인업 ----------
+  App.lineupCard = () => {
+    const G = G_();
+    const lu = Lu.lineup(G);
+    const ps = L.roster(G, G.userTid);
+    const fits = Object.fromEntries(ps.map(p => [p.pid, Lu.fit(G, p)]));
+    const rows = POS.map((pos, i) => {
+      const cur = lu.slots[i] != null ? G.players[lu.slots[i]] : null;
+      const order = ps.slice().sort((a, b) => (injured(a) - injured(b)) || (fits[b.pid].score[pos] - fits[a.pid].score[pos]) || (b.ovr - a.ovr));
+      const opts = `<option value="">— 비워 두기(코치가 채움) —</option>` + order.map(p => {
+        const sc = fits[p.pid].score[pos];
+        const at = lu.slots.indexOf(p.pid);
+        return `<option value="${p.pid}" ${cur && cur.pid === p.pid ? 'selected' : ''}>${esc(p.name)} · ${p.pos} · 능력 ${Math.round(p.ovr)} · 적합 ${sc}${at >= 0 && at !== i ? ` (지금 ${POS[at]})` : ''}${injured(p) ? ' · 부상' : ''}</option>`;
+      }).join('');
+      const sc = cur ? fits[cur.pid].score[pos] : null;
+      const tag = cur ? (injured(cur) ? '<span class="pill bad" title="경기 날 코치가 대신 채웁니다">부상</span>' : `<span class="pill ${fitCls(sc)}" title="이 자리 적합도">적합 ${sc}</span>`) : '<span class="pill">코치</span>';
+      return `<div class="lu-row"><span class="lu-pos"><b>${pos}</b><span class="small muted">${KO[pos]}</span></span><select data-change="luSet" data-i="${i}" aria-label="${KO[pos]} 선발">${opts}</select>${tag}</div>`;
+    }).join('');
+    const warn = !lu.fixed ? '' : POS.map((pos, i) => {
+      const id = lu.slots[i]; if (id == null) return '';
+      const p = G.players[id]; const sc = fits[id].score[pos];
+      return sc < 60 && !injured(p) ? `<li>${esc(p.name)}(${p.pos})는 ${pos} 자리가 낯섭니다(적합 ${sc}). 상대 ${pos}를 막게 됩니다.</li>` : '';
+    }).join('');
+    return `<div class="card" style="margin-top:14px" id="luCard"><h2>주전 라인업 <span class="r">${lu.fixed ? '<span class="pill good">직접 지정</span>' : '<span class="pill">코치 선택</span>'} <button class="btn sm" data-act="luReset" ${lu.fixed ? '' : 'disabled'}>코치 추천으로</button></span></h2>
+      <p class="small muted">자리마다 선발을 고르세요. 다른 자리에 있던 선수를 고르면 두 자리를 맞바꿉니다. 선수는 고른 자리에서 상대 같은 자리 선수와 매치업합니다. 출전 시간은 아래 로테이션 설정을 따르고, 부상이거나 비운 자리는 경기 날 코치가 채웁니다.</p>
+      <div class="lu-grid"><div class="lu-slots">${rows}</div>${App.courtHtml('lu-viz')}</div>
+      ${warn ? `<ul class="small" style="margin:10px 0 0;color:var(--warn)">${warn}</ul>` : ''}</div>`;
+  };
+  App.afters.tactics = () => App.lineupAfter();
+  App.lineupAfter = () => {
+    const G = G_(); if (!document.getElementById('lu-viz')) return;
+    const t = G.teams[G.userTid];
+    const col = App.vizColors([t, t])[0];
+    const lu = Lu.lineup(G);
+    const list = POS.map((pos, i) => {
+      const id = lu.slots[i];
+      if (id == null) return { empty: true, slot: i, pos, nm: '코치' };
+      const p = G.players[id];
+      return { pid: id, slot: i, pos, nm: HM.Sim.shortName(p.name) };
+    });
+    App.courtPlayers('lu-viz', list, [], col, col);
+  };
+  A.luSet = el => {
+    const G = G_();
+    Lu.setSlot(G, +el.dataset.i, el.value === '' ? null : +el.value);
+    App.toast('주전 라인업을 바꿨습니다'); App.autosave && App.autosave(); App.rerender();
+  };
+  A.luReset = () => { Lu.resetLineup(G_()); App.toast('코치 추천 선발로 되돌렸습니다'); App.rerender(); };
+
+  // ---------- 선수 화면 ----------
+  App.starterSlot = pid => { const G = G_(); const p = G.players[pid]; if (!p || p.tid !== G.userTid) return -1; return Lu.lineup(G).slots.indexOf(pid); };
+  App.lineupActs = p => {
+    const i = App.starterSlot(p.pid);
+    return [i >= 0 ? `<button class="btn" data-act="luBench" data-pid="${p.pid}">벤치로 내리기(${POS[i]})</button>` : `<button class="btn" data-act="luStart" data-pid="${p.pid}">⭐ 주전으로 기용</button>`,
+      `<button class="btn" data-act="posModal" data-pid="${p.pid}">🔀 포지션 변경</button>`];
+  };
+  App.starterPill = p => { const i = App.starterSlot(p.pid); return i >= 0 ? `<span class="pill good" title="주전 라인업">⭐ 주전 · ${POS[i]} 자리</span>` : ''; };
+  App.posFitHtml = p => {
+    const G = G_(); const f = Lu.fit(G, p);
+    return `<h2 style="margin-top:14px">포지션 적합도 <span class="r small muted">${f.stats ? '능력치+이번 시즌 기록' : '능력치 기준'}</span></h2>` + f.rank.map(r => `<div class="row nowrap" style="gap:8px;padding:2px 0"><span class="small" style="width:30px;flex:none"><b>${r.pos}</b></span><div class="bar" style="flex:1"><i style="width:${r.score}%;background:${fitCol(r.score)}"></i></div><span class="small num" style="width:28px;text-align:right">${r.score}</span>${r.pos === p.pos ? '<span class="pill" style="flex:none">현재</span>' : '<span style="width:38px;flex:none"></span>'}</div>`).join('');
+  };
+  A.luBench = el => { Lu.benchPlayer(G_(), +el.dataset.pid); App.toast('벤치로 내렸습니다. 빈 자리는 코치가 채웁니다'); App.rerender(); };
+  A.luStart = el => {
+    const G = G_(); const p = G.players[+el.dataset.pid];
+    const lu = Lu.lineup(G); const f = Lu.fit(G, p);
+    const btns = POS.map((pos, i) => {
+      const cur = lu.slots[i] != null ? G.players[lu.slots[i]] : null;
+      return `<button class="hl-item" style="grid-template-columns:auto 1fr auto" data-act="luStartAt" data-pid="${p.pid}" data-i="${i}"><b>${pos}</b><span>${cur ? `${esc(cur.name)} <span class="small muted">(${cur.pos} · 능력 ${Math.round(cur.ovr)}) 대신</span>` : '<span class="muted">빈 자리</span>'}</span><span class="pill ${fitCls(f.score[pos])}">적합 ${f.score[pos]}</span></button>`;
+    }).join('');
+    App.modal(`${p.name} 주전 기용`, `<p class="small muted">어느 자리에 세울까요? 적합도는 ${esc(p.name)}이(가) 그 자리에 얼마나 맞는지입니다.</p><div class="hl-list" style="max-height:none">${btns}</div>`, '<button class="btn" data-act="closeModal">취소</button>');
+  };
+  A.luStartAt = el => {
+    const G = G_(); Lu.setSlot(G, +el.dataset.i, +el.dataset.pid);
+    App.closeModal(); App.toast(`${G.players[+el.dataset.pid].name}을(를) ${POS[+el.dataset.i]} 자리 주전으로 세웠습니다`); App.rerender();
+  };
+  A.posModal = el => {
+    const G = G_(); const p = G.players[+el.dataset.pid]; const f = Lu.fit(G, p);
+    const btns = f.rank.map(r => `<button class="hl-item" style="grid-template-columns:auto 1fr auto" data-act="posSet" data-pid="${p.pid}" data-pos="${r.pos}" ${r.pos === p.pos ? 'disabled' : ''}><b>${r.pos}</b><span>${KO[r.pos]}${r.pos === p.pos ? ' <span class="pill">현재</span>' : ''}</span><span class="pill ${fitCls(r.score)}">적합 ${r.score}</span></button>`).join('');
+    App.modal(`${p.name} 포지션 변경`, `<p class="small muted">포지션은 경기에서 누구를 막는지(매치업), 코치의 선발·교체 구성, 매니저 모드의 포지션 진단에 쓰입니다. 능력치는 그대로입니다. 실제 커리어 모드에서도 직접 정한 포지션은 유지됩니다.</p><div class="hl-list" style="max-height:none">${btns}</div>`, '<button class="btn" data-act="closeModal">취소</button>');
+  };
+  A.posSet = el => {
+    const G = G_(); const p = G.players[+el.dataset.pid];
+    const from = p.pos; Lu.setPos(G, p, el.dataset.pos);
+    App.closeModal(); App.toast(`${p.name}: ${from} → ${p.pos}`); App.autosave && App.autosave(); App.rerender();
+  };
+
+  // ---------- 받은 편지함: 포지션 변경 제안 ----------
+  App.posMsgActs = m => {
+    const G = G_(); const p = G.players[m.pid];
+    if (m.done) return '';
+    if (!p || p.tid !== G.userTid) return '<div class="note" style="margin-top:12px">이 선수는 이제 우리 팀에 없습니다.</div>';
+    if (p.pos !== m.from) return `<div class="note" style="margin-top:12px">지금 포지션은 ${p.pos}입니다.</div>`;
+    return `<div class="row" style="margin-top:14px"><button class="btn pri" data-act="posAccept" data-id="${m.id}">${m.to}(${KO[m.to]})로 바꾸기</button><button class="btn" data-act="posDecline" data-id="${m.id}">${m.from} 유지</button><a class="btn" href="#/tactics">주전 라인업 보기</a></div>`;
+  };
+  A.posAccept = el => {
+    const G = G_(); const m = G.inbox.find(x => x.id === +el.dataset.id); const p = m && G.players[m.pid]; if (!p) return;
+    Lu.setPos(G, p, m.to); m.done = `${p.name}의 포지션을 ${m.from}에서 ${m.to}로 바꿨습니다.`;
+    App.toast(m.done); App.autosave && App.autosave(); App.rerender();
+  };
+  A.posDecline = el => {
+    const G = G_(); const m = G.inbox.find(x => x.id === +el.dataset.id); if (!m) return;
+    m.done = `${m.from} 포지션을 유지하기로 했습니다.`; App.rerender();
   };
 })();
 

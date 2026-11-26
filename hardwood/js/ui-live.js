@@ -25,7 +25,7 @@
     App.modal(`경기 날 — ${g.h === my ? 'vs' : '@'} ${esc(opp.ko)}`, `
       ${ctx ? `<div class="pill warn" style="margin-bottom:10px">${ctx}</div>` : ''}
       <div class="row" style="align-items:stretch">${side(home)}${side(away)}</div>
-      <div class="note" style="margin-top:12px">우리 전술: <b>${tacTxt}</b> · 로테이션 ${G.teams[my].rotation.auto ? '코치 자동' : '직접 설정'}</div>
+      <div class="note" style="margin-top:12px">우리 전술: <b>${tacTxt}</b> · 출전 시간 ${G.teams[my].rotation.auto ? '코치 자동' : '직접 설정'} · 선발 ${HM.Lineup && HM.Lineup.isFixed(G.teams[my].rotation) ? '직접 지정' : '코치 선택'} <a class="lnk" href="#/tactics">바꾸기</a></div>
       ${Season.mgrSet(G).on && App.matchupHtml ? `<div class="card flat" style="margin-top:12px"><h3>🧠 상대 분석</h3>${App.matchupHtml(opp.tid)}</div>` : ''}`,
       `<button class="btn" data-act="pmTactics">전술 수정</button><button class="btn" data-act="quickGame">결과만 보기</button><button class="btn pri" data-act="liveGame">생중계로 지휘</button>`);
   };

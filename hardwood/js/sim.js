@@ -16,21 +16,27 @@
   const TEMPLATE_PO = [39, 37, 35, 33, 31, 23, 18, 14, 10, 0, 0, 0, 0, 0, 0];
 
   // 자동 로테이션: 선발 5명과 출전 시간 목표
-  function autoRotation(players, playoffs) {
+  // fixed: 사용자가 고정한 선발(빈 자리는 코치가 채운다)
+  function autoRotation(players, playoffs, fixed) {
     const list = players.slice().sort((a, b) => b.ovr - a.ovr);
-    const top = list.slice(0, Math.min(7, list.length));
+    const fx = (fixed || []).map(id => list.find(p => p.pid === id)).filter(Boolean).slice(0, 5);
+    const top = list.filter(p => !fx.includes(p)).slice(0, Math.min(7, list.length));
+    const need = Math.min(5 - fx.length, top.length);
     let best = null, bestScore = -1e9;
-    const n = top.length;
-    if (n >= 5) {
-      for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++) for (let d = c + 1; d < n; d++) for (let e = d + 1; e < n; e++) {
-        const five = [top[a], top[b], top[c], top[d], top[e]];
-        let s = five.reduce((x, p) => x + p.ovr, 0);
-        const guards = five.filter(p => p.pos === 'PG' || p.pos === 'SG' || p.a.hdl >= 72).length;
-        const bigs = five.filter(p => p.pos === 'C' || p.pos === 'PF' || p.hgt >= 208).length;
-        if (guards < 1) s -= 8; if (bigs < 1) s -= 8; if (bigs > 3) s -= 5; if (guards > 3) s -= 4;
-        if (s > bestScore) { bestScore = s; best = five; }
-      }
-    } else best = top;
+    const lineScore = five => {
+      let s = five.reduce((x, p) => x + p.ovr, 0);
+      const guards = five.filter(p => p.pos === 'PG' || p.pos === 'SG' || p.a.hdl >= 72).length;
+      const bigs = five.filter(p => p.pos === 'C' || p.pos === 'PF' || p.hgt >= 208).length;
+      if (guards < 1) s -= 8; if (bigs < 1) s -= 8; if (bigs > 3) s -= 5; if (guards > 3) s -= 4;
+      return s;
+    };
+    const pickN = (from, k, acc) => {
+      if (acc.length === k) { const five = fx.concat(acc); const s = lineScore(five); if (s > bestScore) { bestScore = s; best = five; } return; }
+      for (let i = from; i < top.length; i++) { acc.push(top[i]); pickN(i + 1, k, acc); acc.pop(); }
+    };
+    pickN(0, need, []);
+    if (!best) best = fx.concat(top.slice(0, need));
+    best = best.slice().sort((a, b) => b.ovr - a.ovr);
     const starters = best.map(p => p.pid);
     const order = best.slice().concat(list.filter(p => !starters.includes(p.pid)));
     const tpl = playoffs ? TEMPLATE_PO : TEMPLATE;
@@ -119,21 +125,26 @@
       let rot = src.rotation;
       const ids = new Set(avail.map(p => p.pid));
       let starters, minutes;
+      // 사용자가 고정한 선발(출전 시간은 코치 자동이어도 선발은 지킨다)
+      const fixed = rot && rot.starters && (rot.fix || !rot.auto) ? rot.starters.filter(id => id != null && ids.has(id)) : null;
       if (!rot || rot.auto || !rot.starters) {
-        ({ starters, minutes } = autoRotation(avail, this.playoffs));
+        ({ starters, minutes } = autoRotation(avail, this.playoffs, rot && rot.fix ? fixed : null));
       } else {
-        starters = rot.starters.filter(id => ids.has(id));
+        starters = fixed.slice();
         minutes = {};
         let tot = 0;
         for (const p of avail) { minutes[p.pid] = rot.minutes?.[p.pid] ?? 0; tot += minutes[p.pid]; }
-        const auto = autoRotation(avail, this.playoffs);
+        const auto = autoRotation(avail, this.playoffs, fixed);
         if (starters.length < 5) for (const id of auto.starters) if (starters.length < 5 && !starters.includes(id)) starters.push(id);
         if (tot < 200) for (const id in auto.minutes) minutes[id] = Math.max(minutes[id] || 0, auto.minutes[id] * (240 - tot) / 240);
         const sum = Object.values(minutes).reduce((a, b) => a + b, 0) || 1;
         for (const id in minutes) minutes[id] = minutes[id] * 240 / sum;
       }
+      // 선발 자리(PG~C)를 정해 두었으면 그 자리로 매치업을 짠다
+      const slotPos = {};
+      if (fixed && rot.slots) rot.starters.forEach((id, i) => { if (id != null && i < 5) slotPos[id] = R.POS[i]; });
       const roster = avail.map(p => ({
-        p, side, nm: p.name, min: 0, energy: 1, fouls: 0, out: false, onCourt: false, starter: starters.includes(p.pid),
+        p, side, nm: p.name, pp: slotPos[p.pid] || p.pos, min: 0, energy: 1, fouls: 0, out: false, onCourt: false, starter: starters.includes(p.pid),
         target: minutes[p.pid] || 0,
         s: { pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pm: 0 },
       }));
@@ -298,8 +309,8 @@
     // 슛을 고르는 사람과 슛 종류, 기대값 계산에 쓰는 표
     shotTable(off, def) {
       const O = off.court, D = def.court;
-      const So = O.slice().sort((a, b) => POSN[a.p.pos] - POSN[b.p.pos]);
-      const Sd = D.slice().sort((a, b) => POSN[a.p.pos] - POSN[b.p.pos]);
+      const So = O.slice().sort((a, b) => POSN[a.pp] - POSN[b.pp]);
+      const Sd = D.slice().sort((a, b) => POSN[a.pp] - POSN[b.pp]);
       const bestRim = D.reduce((m, r) => Math.max(m, r.p.a.idef), 0);
       const e = this.env;
       const tpBase = e.tpp > 0 ? e.tpp : 0.30;

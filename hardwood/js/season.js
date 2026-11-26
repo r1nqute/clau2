@@ -5,7 +5,7 @@
   const D = () => globalThis.HM_DATA;
 
   // ---------- 자동 진행(턴 끄기) 설정 ----------
-  const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true, watchStop: true, draftFirst: 'round1' };
+  const AUTO_DEFAULT = { games: 'all', gameMode: 'ask', preseason: false, draft: false, resign: false, fa: false, halftime: true, offers: true, minorInjury: true, watchStop: true, draftFirst: 'round1', posSugg: true };
   // 매니저 모드 설정
   function mgrSet(G) {
     G.settings.mgr = Object.assign({ on: true, live: true, auto: false, report: true }, G.settings.mgr || {});
@@ -836,7 +836,10 @@
     if (r !== 'wait' && r !== 'roster') {
       scanFA(G); if (HM.Train) HM.Train.tick(G);
       // 자연 성장은 시즌 중 매주 월요일
-      if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) Prog.naturalTick(G);
+      if (['regular', 'playin', 'playoffs'].includes(G.phase) && new Date(G.date + 'T12:00:00Z').getUTCDay() === 1) {
+        Prog.naturalTick(G);
+        if (HM.Lineup) HM.Lineup.posCheck(G); // 포지션 변경 제안
+      }
     }
     return r;
   }

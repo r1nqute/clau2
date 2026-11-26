@@ -98,7 +98,12 @@
     for (const id of o.bp) { G.players[id].tid = o.a; G.players[id].morale = 55; }
     for (const id of o.ak) G.picks.find(x => x.id === id).tid = o.b;
     for (const id of o.bk) G.picks.find(x => x.id === id).tid = o.a;
-    for (const t of [o.a, o.b]) { const tm = G.teams[t]; if (tm.rotation && !tm.rotation.auto) tm.rotation = { auto: true, starters: [], minutes: {} }; }
+    // 떠난 선수만 선발·출전 시간에서 빼고, 나머지 설정은 그대로 둔다
+    for (const [t, gone] of [[o.a, o.ap], [o.b, o.bp]]) {
+      const r = G.teams[t].rotation; if (!r || !r.starters) continue;
+      r.starters = r.starters.map(id => gone.includes(id) ? null : id);
+      if (r.minutes) for (const id of gone) delete r.minutes[id];
+    }
     if (!G.tradeLog) G.tradeLog = [];
     G.tradeLog.push({ date: G.date, season: G.season, o: U.deepCopy(o) });
   }

@@ -72,11 +72,15 @@
     const place = (list, col, isDef) => {
       const sorted = list.slice().sort((a, b) => (POSN[a.pos] ?? 2) - (POSN[b.pos] ?? 2));
       sorted.forEach((p, i) => {
-        let [x, y] = SLOT[i] || SLOT[0];
+        let [x, y] = SLOT[p.slot ?? i] || SLOT[0];
         if (isDef) { x = x + (RIM.x - x) * 0.22 + 8; y = y + (RIM.y - y) * 0.22; }
-        const gg = el('g', { class: 'pd', 'data-pid': p.pid, transform: `translate(${x},${y})` });
-        gg.appendChild(el('circle', { r: 13, fill: isDef ? 'none' : col, stroke: col, 'stroke-width': isDef ? 3.5 : 2, opacity: isDef ? 0.9 : 1 }));
-        const t = el('text', { y: 27, 'text-anchor': 'middle', class: 'pn' }); t.textContent = p.nm.length > 9 ? p.nm.slice(0, 8) + '…' : p.nm;
+        const gg = el('g', { class: 'pd', 'data-pid': p.pid ?? '', transform: `translate(${x},${y})` });
+        const big = p.slot !== undefined; // 라인업 그림은 크게
+        const rr = big ? 24 : 13;
+        if (p.empty) gg.appendChild(el('circle', { r: rr, fill: 'none', stroke: 'var(--court-line)', 'stroke-width': 2.5, 'stroke-dasharray': '5 4' }));
+        else gg.appendChild(el('circle', { r: rr, fill: isDef ? 'none' : col, stroke: col, 'stroke-width': isDef ? 3.5 : 2, opacity: isDef ? 0.9 : 1 }));
+        if (big) { const lab = el('text', { y: 6, 'text-anchor': 'middle', class: 'pn', style: 'font-size:17px' }); lab.textContent = p.pos; gg.appendChild(lab); }
+        const t = el('text', { y: big ? 44 : 27, 'text-anchor': 'middle', class: 'pn', style: big ? 'font-size:19px' : '' }); t.textContent = p.nm.length > 9 ? p.nm.slice(0, 8) + '…' : p.nm;
         gg.appendChild(t);
         g.appendChild(gg);
       });

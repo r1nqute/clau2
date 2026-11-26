@@ -21,12 +21,13 @@
   function rotation(G, tid) {
     const ps = L.roster(G, tid).filter(p => !(p.injury && p.injury.days > 0));
     const t = G.teams[tid];
-    if (tid === G.userTid && t.rotation && !t.rotation.auto && t.rotation.starters && t.rotation.starters.length) {
+    const fixed = tid === G.userTid && HM.Lineup ? HM.Lineup.fixedIds(G, tid) : null;
+    if (fixed && !t.rotation.auto) {
       const minutes = {};
       for (const p of ps) minutes[p.pid] = +t.rotation.minutes[p.pid] || 0;
-      return { ps, minutes, starters: t.rotation.starters.filter(id => ps.some(p => p.pid === id)) };
+      return { ps, minutes, starters: fixed };
     }
-    const r = Sim.autoRotation(ps, G.phase === 'playoffs');
+    const r = Sim.autoRotation(ps, G.phase === 'playoffs', fixed);
     return { ps, minutes: r.minutes, starters: r.starters };
   }
   function starters(G, tid) {

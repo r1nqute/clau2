@@ -302,3 +302,12 @@ svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stro
 .hl-item:hover { background: var(--panel3); }
 @media (max-width: 860px) { .viz-grid { grid-template-columns: 1fr; } .hl-list { max-height: 260px; } }
 @media (prefers-reduced-motion: reduce) { svg.court .pd { transition: none; } .hl-banner.show, svg.court .rimfx.pop { animation: none; } }
+
+/* 주전 라인업 */
+.lu-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 16px; align-items: start; }
+.lu-slots { display: grid; gap: 8px; }
+.lu-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.lu-row select { width: 100%; min-width: 0; }
+.lu-pos { display: flex; flex-direction: column; line-height: 1.2; }
+.lu-pos b { font-size: 16px; }
+@media (max-width: 700px) { .lu-grid { grid-template-columns: 1fr; } .lu-grid .court-wrap { max-width: 340px; width: 100%; margin: 0 auto; } .lu-row { grid-template-columns: 54px minmax(0, 1fr) auto; } .lu-pos .small { display: none; } }

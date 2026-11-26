@@ -55,7 +55,7 @@
   function realDevelop(G, p, s, age) {
     const x = L.decodeSnap(s);
     p.dev = 0.55 * (p.dev || 0) + U.gauss(0, 1.4);
-    p.a = x.a; p.t = x.t; p.pos = x.pos;
+    p.a = x.a; p.t = x.t; if (!p.posUser) p.pos = x.pos;
     // 바깥 쪽에서 쌓인 경험(정신 능력)은 줄지 않는다
     P.update(p);
     if (Math.abs(p.dev) > 0.05) {
