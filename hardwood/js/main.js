@@ -8,7 +8,9 @@
     if (App.live && !App.live.finished) { App.go('#/live'); return; }
     return cont(mode);
   };
-  window.addEventListener('beforeunload', () => { if (App.G) App.save(true); });
+  window.addEventListener('beforeunload', () => App.flushSave());
+  window.addEventListener('pagehide', () => App.flushSave());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') App.flushSave(); });
 
   const hot = globalThis.claude && globalThis.claude.hot;
   // 페이지가 새 판으로 바뀌어도 하던 게임을 이어 열 수 있게 저장 번호를 남긴다
@@ -27,7 +29,7 @@
       }
     }
     if (data && data.saveId) {
-      try { App.G = await HM.Store.load(data.saveId); App.ui = { sorts: {}, tabs: {} }; return App.go('#/home'); } catch (e) { /* 타이틀로 */ }
+      try { App.G = await HM.Store.loadBest(data.saveId); App.ui = { sorts: {}, tabs: {} }; return App.go('#/home'); } catch (e) { /* 타이틀로 */ }
     }
     App.go('#/title');
   }

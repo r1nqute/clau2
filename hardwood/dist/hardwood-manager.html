@@ -4197,6 +4197,124 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       return G;
     },
   };
+  // ---------- 클라우드 저장: claude.ai 아티팩트의 개인 DB(data/users/<내 id>/, 나만 읽고 씀) ----------
+  // 브라우저 저장소는 앱 안 화면·사생활 보호 모드 등에서 비워질 수 있어서, 같은 게임을 압축해 클라우드에도 둔다.
+  const CHUNK = 200000; // 문서 하나 256KiB 제한 안쪽
+  let cloudP = null;
+  const C = { state: 'unknown', last: 0, err: '' };
+  function cloud() {
+    if (cloudP) return cloudP;
+    cloudP = (async () => {
+      const c = globalThis.claude;
+      if (!c || typeof c.use !== 'function') { C.state = 'off'; return null; }
+      try {
+        const [db, user] = await Promise.all([c.use('db'), c.use('user')]);
+        const uid = db && user ? await user.id() : null;
+        if (!db || !uid) { C.state = 'off'; return null; }
+        if (C.state === 'unknown') C.state = 'on';
+        return { col: db.collection('data/users/' + uid) };
+      } catch (e) { C.state = 'off'; return null; }
+    })();
+    return cloudP;
+  }
+  async function pack(str) {
+    if (typeof CompressionStream === 'undefined') return { enc: 'json', data: str };
+    const st = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+    const buf = new Uint8Array(await new Response(st).arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return { enc: 'gz64', data: btoa(bin) };
+  }
+  async function unpack(enc, data) {
+    if (enc === 'json') return data;
+    const bin = atob(data);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const st = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(st).text();
+  }
+  const errTxt = e => e && e.code === 'quota_exceeded' ? '클라우드 저장 공간이 가득 찼습니다. 타이틀 화면에서 안 쓰는 저장을 지우세요.' : (e && (e.message || e.code)) || String(e);
+  let busy = null, again = null;
+  const Cloud = {
+    status: () => C,
+    async available() { return !!(await cloud()); },
+    async list() {
+      const c = await cloud(); if (!c) return [];
+      const snap = await c.col.get();
+      return snap.docs.map(d => d.data()).filter(x => x && x.kind === 'save' && x.meta).map(x => x.meta);
+    },
+    // 한 번에 하나만 쓴다. 쓰는 동안 또 부르면 끝난 뒤 가장 최근 상태로 한 번 더 쓴다.
+    async save(G) {
+      if (busy) { again = G; return busy; }
+      busy = (async () => {
+        const c = await cloud(); if (!c) return false;
+        try {
+          if (!G.saveId) G.saveId = 's' + Date.now().toString(36);
+          const meta = metaOf(G);
+          const { enc, data } = await pack(JSON.stringify(G));
+          const ref = c.col.doc(meta.id);
+          const prev = await ref.get();
+          const pm = prev.exists ? prev.data() : {};
+          // 두 벌(a/b)을 번갈아 써서, 쓰다 끊겨도 앞 저장은 온전히 남는다
+          const slot = pm.slot === 'a' ? 'b' : 'a', other = slot === 'a' ? 'b' : 'a';
+          const v = Date.now(), n = Math.max(1, Math.ceil(data.length / CHUNK));
+          for (let i = 0; i < n; i++) await ref.collection('chunks').doc(slot + i).set({ v, d: data.slice(i * CHUNK, (i + 1) * CHUNK) });
+          await ref.set({ kind: 'save', meta, slot, n, enc, v, ['n_' + slot]: n, ['n_' + other]: pm['n_' + other] || 0 });
+          C.state = 'on'; C.last = Date.now(); C.err = '';
+          return true;
+        } catch (e) { C.state = 'error'; C.err = errTxt(e); return false; }
+      })();
+      const r = await busy; busy = null;
+      if (again) { const g = again; again = null; return Cloud.save(g); }
+      return r;
+    },
+    async load(id) {
+      const c = await cloud(); if (!c) throw new Error('클라우드 저장을 쓸 수 없습니다');
+      const ref = c.col.doc(id);
+      const m = await ref.get();
+      if (!m.exists) throw new Error('클라우드에 저장이 없습니다');
+      const x = m.data();
+      const parts = [];
+      for (let i = 0; i < x.n; i++) {
+        const ch = await ref.collection('chunks').doc(x.slot + i).get();
+        const d = ch.exists ? ch.data() : null;
+        if (!d || d.v !== x.v) throw new Error('클라우드 저장이 온전하지 않습니다');
+        parts.push(d.d);
+      }
+      return JSON.parse(await unpack(x.enc, parts.join('')));
+    },
+    async del(id) {
+      const c = await cloud(); if (!c) return;
+      const ref = c.col.doc(id);
+      const m = await ref.get(); if (!m.exists) return;
+      const x = m.data();
+      for (const sl of ['a', 'b']) for (let i = 0; i < (x['n_' + sl] || 0); i++) await ref.collection('chunks').doc(sl + i).delete();
+      await ref.delete();
+    },
+  };
+  S.cloud = Cloud;
+  // 이 기기와 클라우드의 저장을 합친 목록(같은 게임은 더 최근 것)
+  S.listAll = async () => {
+    const [loc, cl] = await Promise.all([S.list().catch(() => []), Cloud.list().catch(() => [])]);
+    const by = {};
+    for (const m of loc) by[m.id] = Object.assign({}, m, { local: m.updated });
+    for (const m of cl) {
+      const o = by[m.id];
+      if (!o) by[m.id] = Object.assign({}, m, { cloud: m.updated });
+      else { o.cloud = m.updated; if (m.updated > o.updated) Object.assign(o, m, { local: o.local, cloud: m.updated }); }
+    }
+    return Object.values(by).sort((a, b) => b.updated - a.updated);
+  };
+  // 더 최근 쪽에서 불러온다(한쪽이 실패하면 다른 쪽)
+  S.loadBest = async (id, hint) => {
+    const order = hint && hint.cloud && (!hint.local || hint.cloud > hint.local) ? ['cloud', 'local'] : ['local', 'cloud'];
+    let err = null;
+    for (const w of order) {
+      try { return w === 'cloud' ? await Cloud.load(id) : await S.load(id); } catch (e) { err = e; }
+    }
+    throw err || new Error('저장 파일을 찾지 못했습니다');
+  };
+  S.delAll = async id => { await Promise.allSettled([S.del(id), Cloud.del(id)]); };
   HM.Store = S;
 })();
 
@@ -4420,11 +4538,11 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       return;
     }
     const fn = App.acts[el.dataset.act];
-    if (fn) { e.preventDefault(); fn(el, e); }
+    if (fn) { e.preventDefault(); fn(el, e); App.dirty(); }
   });
   document.addEventListener('change', e => {
     const el = e.target.closest('[data-change]');
-    if (el && App.acts[el.dataset.change]) App.acts[el.dataset.change](el, e);
+    if (el && App.acts[el.dataset.change]) { App.acts[el.dataset.change](el, e); App.dirty(); }
   });
   document.addEventListener('input', e => {
     const el = e.target.closest('[data-input]');
@@ -4437,11 +4555,38 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   App.acts.tab = el => { App.ui.tabs[el.dataset.group] = el.dataset.tab; App.rerender(); };
 
   // ---------- 저장 ----------
-  App.save = async (quiet) => {
-    try { await HM.Store.save(App.G); if (!quiet) App.toast('저장했습니다'); }
-    catch (e) { App.toast('저장 실패: ' + e.message, 4000); }
+  // 이 기기(브라우저)에 바로 저장하고, 클라우드에는 최대 40초에 한 번 모아서 올린다
+  let cloudTimer = null, lastCloud = 0, dirtyTimer = null;
+  App.cloudSave = now => {
+    if (!App.G || !HM.Store.cloud) return;
+    clearTimeout(cloudTimer);
+    const run = async () => {
+      cloudTimer = null; lastCloud = Date.now();
+      const ok = await HM.Store.cloud.save(App.G);
+      const st = HM.Store.cloud.status();
+      if (!ok && st.state === 'error' && !App._cloudWarned) { App._cloudWarned = true; App.toast('클라우드 저장 실패: ' + st.err, 5000); }
+      if (ok) App._cloudWarned = false;
+      if (App.route && App.route.name === 'settings' && App.afters.settings) App.afters.settings();
+    };
+    const wait = now ? 0 : Math.max(0, 40000 - (Date.now() - lastCloud));
+    cloudTimer = setTimeout(run, wait);
   };
-  App.autosave = () => { if (App.G && App.G.settings.autosave !== false) App.save(true); };
+  App.save = async (quiet) => {
+    let localOk = true;
+    try { await HM.Store.save(App.G); }
+    catch (e) { localOk = false; if (!(await HM.Store.cloud?.available())) App.toast('저장 실패: ' + e.message, 4000); }
+    App.cloudSave(!quiet);
+    if (!quiet) App.toast(localOk ? '저장했습니다' : '이 기기에는 저장하지 못해 클라우드에 저장합니다', 2500);
+  };
+  App.autosave = () => { clearTimeout(dirtyTimer); dirtyTimer = null; if (App.G && App.G.settings.autosave !== false) App.save(true); };
+  // 단추·선택으로 무언가 바꾸면 잠시 뒤 자동 저장(여러 번 눌러도 한 번)
+  App.dirty = () => {
+    if (!App.G || App.G.settings.autosave === false) return;
+    clearTimeout(dirtyTimer);
+    dirtyTimer = setTimeout(() => { dirtyTimer = null; if (App.G && !App.running) App.save(true); }, 1500);
+  };
+  // 앱을 내리거나 닫을 때(휴대폰은 beforeunload가 거의 안 온다)
+  App.flushSave = () => { if (!App.G || App.G.settings.autosave === false) return; clearTimeout(dirtyTimer); dirtyTimer = null; HM.Store.save(App.G).catch(() => { }); App.cloudSave(true); };
 
   // ---------- 계속 ----------
   App.acts.contMenu = () => {
@@ -5256,7 +5401,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     <div class="grid g2">
       <div class="card"><h2>저장</h2><p class="small muted">게임은 이 브라우저에 저장됩니다(자동 저장 ${G.settings.autosave !== false ? '켜짐' : '꺼짐'}). 다른 기기로 옮기려면 파일로 내보내세요.</p>
         <div class="row"><button class="btn pri" data-act="saveNow">지금 저장</button><button class="btn" data-act="exportSave">파일로 내보내기</button><button class="btn" data-act="toTitle">타이틀로</button></div>
-        <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행할 때마다 자동 저장</label></div>
+        <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행하거나 무언가 바꿀 때마다 자동 저장</label>
+        <div class="small" id="cloudSt" style="margin-top:8px">☁️ 클라우드 저장 확인 중…</div></div>
       <div class="card"><h2>화면 테마</h2><div class="grid g3">${[['dark', '🌙 다크 모드'], ['light', '☀️ 밝게'], ['system', '📱 기기 설정 따르기']].map(([v, l]) => `<label class="opt"><input type="radio" name="theme" value="${v}" ${theme === v ? 'checked' : ''} data-change="theme"><span><b>${l}</b></span></label>`).join('')}</div>
         <p class="small muted" style="margin-top:8px">위쪽 막대의 🌙/☀️ 단추로도 바로 바꿀 수 있습니다.</p></div>
       ${App.autoCard()}
@@ -5307,7 +5453,16 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     App.toast(r === 'saved' ? '저장 파일을 내보냈습니다' : r === 'declined' ? '내보내기를 취소했습니다' : '이 화면에서는 파일로 내보낼 수 없습니다. 브라우저에서 열어 보세요', 3500);
   };
   A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; App.go('#/title'); };
-  A.autosave = el => { G_().settings.autosave = el.checked; };
+  A.autosave = el => { G_().settings.autosave = el.checked; if (el.checked) App.save(true); };
+  App.afters.settings = async () => {
+    const el = document.getElementById('cloudSt'); if (!el) return;
+    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
+    const st = ok ? HM.Store.cloud.status() : null;
+    if (!document.body.contains(el)) return;
+    el.innerHTML = !ok ? '⚠️ 이 화면에서는 클라우드 저장을 쓸 수 없어 이 브라우저에만 저장됩니다. 가끔 "파일로 내보내기"로 백업하세요.'
+      : st.state === 'error' ? `⚠️ 클라우드 저장 실패: ${esc(st.err)} <button class="btn sm" data-act="saveNow">다시 저장</button>`
+      : `☁️ 클라우드 저장 켜짐(내 계정에만 보임)${st.last ? ` · 마지막 ${new Date(st.last).toLocaleTimeString('ko-KR')}` : ' · 곧 첫 저장'}`;
+  };
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };
 
@@ -6632,15 +6787,25 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       <p class="small muted" style="margin-top:14px">선수 능력치는 Basketball-Reference 기록을 바탕으로 계산했습니다. NBA와 관계없는 팬 제작 시뮬레이션입니다.</p>
     </div></div>`;
   };
+  // 이어하기: 이 기기 저장을 먼저 보이고, 클라우드 저장이 도착하면 합친다
   App.afters.title = async () => {
     const el = document.getElementById('saves'); if (!el) return;
-    let list = [];
-    try { list = await HM.Store.list(); } catch (e) { list = []; }
-    if (!list.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="card"><h2>이어하기</h2><div class="grid">${list.slice(0, 8).map(m => `<div class="row nowrap" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2)">
+    const where = m => m.cloud && m.local ? '<span class="pill good">☁️ 클라우드 · 이 기기</span>' : m.cloud ? '<span class="pill good">☁️ 클라우드</span>' : '<span class="pill">이 기기</span>';
+    const draw = (list, note) => {
+      App._saveList = list;
+      el.innerHTML = list.length || note ? `<div class="card"><h2>이어하기</h2>${list.length ? `<div class="grid">${list.slice(0, 10).map(m => `<div class="row nowrap" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2)">
       <span class="tbadge" style="${App.tstyle({ colors: m.colors || ['#555555', '#cccccc'] })}">${esc(m.team)}</span>
-      <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div></div>
-      <button class="btn pri sm" data-act="loadSave" data-id="${m.id}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${m.id}">삭제</button></div>`).join('')}</div></div>`;
+      <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div><div style="margin-top:3px">${where(m)}</div></div>
+      <button class="btn pri sm" data-act="loadSave" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div>`).join('')}</div>` : ''}${note ? `<p class="small muted" style="margin:${list.length ? '10px' : '0'} 0 0">${note}</p>` : ''}</div>` : '';
+    };
+    let loc = [];
+    try { loc = (await HM.Store.list()).map(m => Object.assign({}, m, { local: m.updated })); } catch (e) { loc = []; }
+    draw(loc, '☁️ 클라우드 저장을 확인하는 중…');
+    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
+    let all = loc;
+    if (ok) { try { all = await HM.Store.listAll(); } catch (e) { all = loc; } }
+    if (document.getElementById('saves') !== el) return;
+    draw(all, ok ? '☁️ 클라우드 저장이 켜져 있습니다. 진행할 때마다 이 기기와 클라우드(내 계정에만 보임)에 함께 저장됩니다.' : '이 화면에서는 브라우저에만 저장됩니다. 브라우저 데이터가 지워지면 사라지니, 가끔 설정의 "파일로 내보내기"로 백업하세요.');
   };
   A.newYear = el => { App.newSel.year = +el.value; App.newSel.abbr = null; App.render(); };
   A.newTeam = el => { App.newSel.abbr = el.dataset.abbr; App.render(); };
@@ -6666,7 +6831,8 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   A.loadSave = async el => {
     App.busy(true, '불러오는 중…');
     try {
-      const G = await HM.Store.load(el.dataset.id);
+      const hint = (App._saveList || []).find(m => m.id === el.dataset.id);
+      const G = await HM.Store.loadBest(el.dataset.id, hint);
       App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
       App.busy(false);
       App.go('#/home');
@@ -6675,7 +6841,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
   A.delSave = async el => {
     const ok = await App.confirm('저장 삭제', '이 저장을 지울까요? 되돌릴 수 없습니다.', '삭제');
     if (!ok) return;
-    await HM.Store.del(el.dataset.id); App.render();
+    await HM.Store.delAll(el.dataset.id); App.render();
   };
   A.importSave = el => {
     const f = el.files && el.files[0]; if (!f) return;
@@ -6704,7 +6870,9 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
     if (App.live && !App.live.finished) { App.go('#/live'); return; }
     return cont(mode);
   };
-  window.addEventListener('beforeunload', () => { if (App.G) App.save(true); });
+  window.addEventListener('beforeunload', () => App.flushSave());
+  window.addEventListener('pagehide', () => App.flushSave());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') App.flushSave(); });
 
   const hot = globalThis.claude && globalThis.claude.hot;
   // 페이지가 새 판으로 바뀌어도 하던 게임을 이어 열 수 있게 저장 번호를 남긴다
@@ -6723,7 +6891,7 @@ globalThis.HM_DATA={"v":1,"first":1978,"last":2027,"built":"2026-11-25","seasons
       }
     }
     if (data && data.saveId) {
-      try { App.G = await HM.Store.load(data.saveId); App.ui = { sorts: {}, tabs: {} }; return App.go('#/home'); } catch (e) { /* 타이틀로 */ }
+      try { App.G = await HM.Store.loadBest(data.saveId); App.ui = { sorts: {}, tabs: {} }; return App.go('#/home'); } catch (e) { /* 타이틀로 */ }
     }
     App.go('#/title');
   }

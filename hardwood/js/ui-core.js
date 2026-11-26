@@ -216,11 +216,11 @@
       return;
     }
     const fn = App.acts[el.dataset.act];
-    if (fn) { e.preventDefault(); fn(el, e); }
+    if (fn) { e.preventDefault(); fn(el, e); App.dirty(); }
   });
   document.addEventListener('change', e => {
     const el = e.target.closest('[data-change]');
-    if (el && App.acts[el.dataset.change]) App.acts[el.dataset.change](el, e);
+    if (el && App.acts[el.dataset.change]) { App.acts[el.dataset.change](el, e); App.dirty(); }
   });
   document.addEventListener('input', e => {
     const el = e.target.closest('[data-input]');
@@ -233,11 +233,38 @@
   App.acts.tab = el => { App.ui.tabs[el.dataset.group] = el.dataset.tab; App.rerender(); };
 
   // ---------- 저장 ----------
-  App.save = async (quiet) => {
-    try { await HM.Store.save(App.G); if (!quiet) App.toast('저장했습니다'); }
-    catch (e) { App.toast('저장 실패: ' + e.message, 4000); }
+  // 이 기기(브라우저)에 바로 저장하고, 클라우드에는 최대 40초에 한 번 모아서 올린다
+  let cloudTimer = null, lastCloud = 0, dirtyTimer = null;
+  App.cloudSave = now => {
+    if (!App.G || !HM.Store.cloud) return;
+    clearTimeout(cloudTimer);
+    const run = async () => {
+      cloudTimer = null; lastCloud = Date.now();
+      const ok = await HM.Store.cloud.save(App.G);
+      const st = HM.Store.cloud.status();
+      if (!ok && st.state === 'error' && !App._cloudWarned) { App._cloudWarned = true; App.toast('클라우드 저장 실패: ' + st.err, 5000); }
+      if (ok) App._cloudWarned = false;
+      if (App.route && App.route.name === 'settings' && App.afters.settings) App.afters.settings();
+    };
+    const wait = now ? 0 : Math.max(0, 40000 - (Date.now() - lastCloud));
+    cloudTimer = setTimeout(run, wait);
   };
-  App.autosave = () => { if (App.G && App.G.settings.autosave !== false) App.save(true); };
+  App.save = async (quiet) => {
+    let localOk = true;
+    try { await HM.Store.save(App.G); }
+    catch (e) { localOk = false; if (!(await HM.Store.cloud?.available())) App.toast('저장 실패: ' + e.message, 4000); }
+    App.cloudSave(!quiet);
+    if (!quiet) App.toast(localOk ? '저장했습니다' : '이 기기에는 저장하지 못해 클라우드에 저장합니다', 2500);
+  };
+  App.autosave = () => { clearTimeout(dirtyTimer); dirtyTimer = null; if (App.G && App.G.settings.autosave !== false) App.save(true); };
+  // 단추·선택으로 무언가 바꾸면 잠시 뒤 자동 저장(여러 번 눌러도 한 번)
+  App.dirty = () => {
+    if (!App.G || App.G.settings.autosave === false) return;
+    clearTimeout(dirtyTimer);
+    dirtyTimer = setTimeout(() => { dirtyTimer = null; if (App.G && !App.running) App.save(true); }, 1500);
+  };
+  // 앱을 내리거나 닫을 때(휴대폰은 beforeunload가 거의 안 온다)
+  App.flushSave = () => { if (!App.G || App.G.settings.autosave === false) return; clearTimeout(dirtyTimer); dirtyTimer = null; HM.Store.save(App.G).catch(() => { }); App.cloudSave(true); };
 
   // ---------- 계속 ----------
   App.acts.contMenu = () => {

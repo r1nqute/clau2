@@ -79,15 +79,25 @@
       <p class="small muted" style="margin-top:14px">선수 능력치는 Basketball-Reference 기록을 바탕으로 계산했습니다. NBA와 관계없는 팬 제작 시뮬레이션입니다.</p>
     </div></div>`;
   };
+  // 이어하기: 이 기기 저장을 먼저 보이고, 클라우드 저장이 도착하면 합친다
   App.afters.title = async () => {
     const el = document.getElementById('saves'); if (!el) return;
-    let list = [];
-    try { list = await HM.Store.list(); } catch (e) { list = []; }
-    if (!list.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="card"><h2>이어하기</h2><div class="grid">${list.slice(0, 8).map(m => `<div class="row nowrap" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2)">
+    const where = m => m.cloud && m.local ? '<span class="pill good">☁️ 클라우드 · 이 기기</span>' : m.cloud ? '<span class="pill good">☁️ 클라우드</span>' : '<span class="pill">이 기기</span>';
+    const draw = (list, note) => {
+      App._saveList = list;
+      el.innerHTML = list.length || note ? `<div class="card"><h2>이어하기</h2>${list.length ? `<div class="grid">${list.slice(0, 10).map(m => `<div class="row nowrap" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2)">
       <span class="tbadge" style="${App.tstyle({ colors: m.colors || ['#555555', '#cccccc'] })}">${esc(m.team)}</span>
-      <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div></div>
-      <button class="btn pri sm" data-act="loadSave" data-id="${m.id}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${m.id}">삭제</button></div>`).join('')}</div></div>`;
+      <div style="flex:1;min-width:0"><b>${esc(m.name)}</b><div class="small muted">${U.seasonLabel(m.season)} · ${U.fmtDate(m.date)} · ${App.phaseTxt(m.phase)}</div><div style="margin-top:3px">${where(m)}</div></div>
+      <button class="btn pri sm" data-act="loadSave" data-id="${esc(m.id)}">불러오기</button><button class="btn sm danger" data-act="delSave" data-id="${esc(m.id)}">삭제</button></div>`).join('')}</div>` : ''}${note ? `<p class="small muted" style="margin:${list.length ? '10px' : '0'} 0 0">${note}</p>` : ''}</div>` : '';
+    };
+    let loc = [];
+    try { loc = (await HM.Store.list()).map(m => Object.assign({}, m, { local: m.updated })); } catch (e) { loc = []; }
+    draw(loc, '☁️ 클라우드 저장을 확인하는 중…');
+    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
+    let all = loc;
+    if (ok) { try { all = await HM.Store.listAll(); } catch (e) { all = loc; } }
+    if (document.getElementById('saves') !== el) return;
+    draw(all, ok ? '☁️ 클라우드 저장이 켜져 있습니다. 진행할 때마다 이 기기와 클라우드(내 계정에만 보임)에 함께 저장됩니다.' : '이 화면에서는 브라우저에만 저장됩니다. 브라우저 데이터가 지워지면 사라지니, 가끔 설정의 "파일로 내보내기"로 백업하세요.');
   };
   A.newYear = el => { App.newSel.year = +el.value; App.newSel.abbr = null; App.render(); };
   A.newTeam = el => { App.newSel.abbr = el.dataset.abbr; App.render(); };
@@ -113,7 +123,8 @@
   A.loadSave = async el => {
     App.busy(true, '불러오는 중…');
     try {
-      const G = await HM.Store.load(el.dataset.id);
+      const hint = (App._saveList || []).find(m => m.id === el.dataset.id);
+      const G = await HM.Store.loadBest(el.dataset.id, hint);
       App.G = G; App.ui = { sorts: {}, tabs: {} }; App.live = null;
       App.busy(false);
       App.go('#/home');
@@ -122,7 +133,7 @@
   A.delSave = async el => {
     const ok = await App.confirm('저장 삭제', '이 저장을 지울까요? 되돌릴 수 없습니다.', '삭제');
     if (!ok) return;
-    await HM.Store.del(el.dataset.id); App.render();
+    await HM.Store.delAll(el.dataset.id); App.render();
   };
   A.importSave = el => {
     const f = el.files && el.files[0]; if (!f) return;

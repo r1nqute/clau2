@@ -649,7 +649,8 @@
     <div class="grid g2">
       <div class="card"><h2>저장</h2><p class="small muted">게임은 이 브라우저에 저장됩니다(자동 저장 ${G.settings.autosave !== false ? '켜짐' : '꺼짐'}). 다른 기기로 옮기려면 파일로 내보내세요.</p>
         <div class="row"><button class="btn pri" data-act="saveNow">지금 저장</button><button class="btn" data-act="exportSave">파일로 내보내기</button><button class="btn" data-act="toTitle">타이틀로</button></div>
-        <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행할 때마다 자동 저장</label></div>
+        <label class="row" style="margin-top:12px"><input type="checkbox" ${G.settings.autosave !== false ? 'checked' : ''} data-change="autosave"> 진행하거나 무언가 바꿀 때마다 자동 저장</label>
+        <div class="small" id="cloudSt" style="margin-top:8px">☁️ 클라우드 저장 확인 중…</div></div>
       <div class="card"><h2>화면 테마</h2><div class="grid g3">${[['dark', '🌙 다크 모드'], ['light', '☀️ 밝게'], ['system', '📱 기기 설정 따르기']].map(([v, l]) => `<label class="opt"><input type="radio" name="theme" value="${v}" ${theme === v ? 'checked' : ''} data-change="theme"><span><b>${l}</b></span></label>`).join('')}</div>
         <p class="small muted" style="margin-top:8px">위쪽 막대의 🌙/☀️ 단추로도 바로 바꿀 수 있습니다.</p></div>
       ${App.autoCard()}
@@ -700,7 +701,16 @@
     App.toast(r === 'saved' ? '저장 파일을 내보냈습니다' : r === 'declined' ? '내보내기를 취소했습니다' : '이 화면에서는 파일로 내보낼 수 없습니다. 브라우저에서 열어 보세요', 3500);
   };
   A.toTitle = async () => { await App.save(true); App.G = null; App.live = null; App.go('#/title'); };
-  A.autosave = el => { G_().settings.autosave = el.checked; };
+  A.autosave = el => { G_().settings.autosave = el.checked; if (el.checked) App.save(true); };
+  App.afters.settings = async () => {
+    const el = document.getElementById('cloudSt'); if (!el) return;
+    const ok = HM.Store.cloud ? await HM.Store.cloud.available() : false;
+    const st = ok ? HM.Store.cloud.status() : null;
+    if (!document.body.contains(el)) return;
+    el.innerHTML = !ok ? '⚠️ 이 화면에서는 클라우드 저장을 쓸 수 없어 이 브라우저에만 저장됩니다. 가끔 "파일로 내보내기"로 백업하세요.'
+      : st.state === 'error' ? `⚠️ 클라우드 저장 실패: ${esc(st.err)} <button class="btn sm" data-act="saveNow">다시 저장</button>`
+      : `☁️ 클라우드 저장 켜짐(내 계정에만 보임)${st.last ? ` · 마지막 ${new Date(st.last).toLocaleTimeString('ko-KR')}` : ' · 곧 첫 저장'}`;
+  };
   A.progMode = el => { G_().settings.prog = el.value; App.toast('다음 시즌부터 적용됩니다'); };
   A.theme = el => { App.setTheme(el.value); };
 
