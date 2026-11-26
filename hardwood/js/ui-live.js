@@ -69,25 +69,35 @@
     setTimeout(() => App.resumeLive(), 300);
   };
   App.pauseLive = () => { if (App.live) { App.live.paused = true; clearTimeout(App.live.timer); App.live.timer = null; } };
+  // 한 포제션씩: 엔진이 한 포제션을 치르고 → 코트에서 그 장면을 재생하고 → 끝나면 중계 글·기록을 갱신
   App.resumeLive = () => {
     const lv = App.live; if (!lv || lv.finished) return;
     lv.paused = false;
     clearTimeout(lv.timer);
-    const tick = () => {
-      if (!App.live || lv.paused || lv.finished) return;
+    const chain = lv.chain = (lv.chain || 0) + 1;
+    const alive = () => App.live === lv && !lv.paused && !lv.finished && lv.chain === chain;
+    const tick = async () => {
+      if (!alive()) return;
+      if (lv.animP) await lv.animP; // 앞 장면이 아직 재생 중이면 기다린다
+      if (!alive()) return;
       lv.game.next();
+      const anim = App.livePlay ? App.livePlay() : null;
+      if (anim) { lv.animP = anim; await anim; if (lv.animP === anim) lv.animP = null; }
+      if (App.live !== lv || lv.chain !== chain || lv.finished) return;
       if (lv.game.done) return finishLive();
       // 하프타임에 잠깐 멈춘다
       if (!lv.half && lv.game.q === 3) { lv.half = true; if (Season.autoSet(G_()).halftime) { lv.paused = true; liveUpdate(); App.toast('하프타임 — 전술과 로테이션을 점검하세요', 3000); return; } }
       liveUpdate();
-      lv.timer = setTimeout(tick, SPEEDS[lv.speed]);
+      if (!alive()) return;
+      lv.timer = setTimeout(tick, anim ? 150 : SPEEDS[lv.speed]);
     };
     liveUpdate();
-    lv.timer = setTimeout(tick, SPEEDS[lv.speed]);
+    lv.timer = setTimeout(tick, 250);
   };
   function finishLive() {
     const lv = App.live; const G = G_();
     lv.finished = true; clearTimeout(lv.timer);
+    if (App.stopPlay) App.stopPlay();
     const res = lv.game.result();
     Season.day(G, res);
     App.autosave();
@@ -163,7 +173,7 @@
   A.livePause = () => { const lv = App.live; if (lv.paused) App.resumeLive(); else { App.pauseLive(); liveUpdate(); } };
   A.liveSpeed = el => { App.live.speed = +el.dataset.s; liveUpdate(); };
   A.liveEnd = () => {
-    const lv = App.live; App.pauseLive();
+    const lv = App.live; App.pauseLive(); if (App.stopPlay) App.stopPlay();
     const game = lv.game;
     let guard = 0;
     while (!game.done && guard++ < 3000) game.next();
@@ -173,7 +183,7 @@
   A.liveSkip = el => {
     const lv = App.live; const game = lv.game;
     const wasPaused = lv.paused;
-    App.pauseLive();
+    App.pauseLive(); if (App.stopPlay) App.stopPlay();
     const q0 = game.q;
     let guard = 0;
     if (el.dataset.to === 'q') { while (!game.done && game.q === q0 && guard++ < 3000) game.next(); }

@@ -204,6 +204,7 @@
       if (late && margin > 0 && margin <= 8 && this.clock > 2) {
         dur = Math.min(this.clock, 2 + Math.random() * 5);
         this.tick(dur);
+        this.rec({ t: 'poss', side: off.side, o: off.court.map(r => r.p.pid), d: def.court.map(r => r.p.pid) });
         const fouler = U.wpick(def.court, def.court.map(r => 1 / (1 + r.fouls)));
         this.foul(fouler);
         const shooter = U.wpick(off.court, off.court.map(r => r.p.t.usg));
@@ -220,6 +221,8 @@
       }
       if (dur > this.clock) dur = this.clock;
       this.tick(dur);
+      // 장면 재생용: 이 포제션의 공격·수비 다섯 명
+      this.rec({ t: 'poss', side: off.side, o: off.court.map(r => r.p.pid), d: def.court.map(r => r.p.pid) });
       this.runPossession(off, def);
       return this.endPoss();
     }

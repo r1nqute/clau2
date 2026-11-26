@@ -292,7 +292,6 @@ svg.court .rim { stroke: #e2571e; stroke-width: 3; }
 svg.court .ball { fill: #e8772e; stroke: #5a2a0a; stroke-width: 1.5; }
 svg.court .rimfx.pop { animation: rimpop .6s ease-out forwards; }
 @keyframes rimpop { from { r: 8; opacity: 1; stroke-width: 6; } to { r: 46; opacity: 0; stroke-width: 1; } }
-svg.court .pd { transition: transform .35s ease; }
 svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.65); stroke-width: 3px; }
 .hl-banner { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--hc, var(--accent)); color: #fff; font-weight: 900; padding: 8px 14px; border-radius: 10px; box-shadow: var(--shadow); white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; }
 .hl-banner.show { animation: hlpop .35s ease-out; }
@@ -301,7 +300,7 @@ svg.court .pn { font-size: 15px; font-weight: 800; fill: #fff; paint-order: stro
 .hl-item { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; text-align: left; border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 13px; }
 .hl-item:hover { background: var(--panel3); }
 @media (max-width: 860px) { .viz-grid { grid-template-columns: 1fr; } .hl-list { max-height: 260px; } }
-@media (prefers-reduced-motion: reduce) { svg.court .pd { transition: none; } .hl-banner.show, svg.court .rimfx.pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hl-banner.show, svg.court .rimfx.pop { animation: none; } }
 
 /* 주전 라인업 */
 .lu-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 16px; align-items: start; }

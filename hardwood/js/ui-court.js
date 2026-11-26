@@ -89,7 +89,7 @@
   };
 
   // 슛 애니메이션: 슈터가 그 자리로 가고, 공이 골대로 날아간다
-  App.courtShoot = (id, e, color, ms = 650) => new Promise(res => {
+  App.courtShoot = (id, e, color, ms = 650, mark = true) => new Promise(res => {
     const ball = q(id, '.ball'), fx = q(id, '.rimfx');
     if (!ball || e.x === undefined) return res();
     const sx = e.x * 10, sy = e.y * 10;
@@ -105,7 +105,7 @@
       ball.setAttribute('cx', x); ball.setAttribute('cy', y - h * 18); ball.setAttribute('r', 6 + h * 4);
       if (t < 1) return requestAnimationFrame(step);
       if (e.made) { fx.setAttribute('stroke', color); fx.setAttribute('opacity', 1); fx.setAttribute('r', 8); fx.classList.remove('pop'); void fx.getBBox(); fx.classList.add('pop'); }
-      setTimeout(() => { ball.setAttribute('opacity', 0); App.courtAddShot(id, e, color); res(); }, 140);
+      setTimeout(() => { ball.setAttribute('opacity', 0); if (mark) App.courtAddShot(id, e, color); res(); }, 140);
     };
     requestAnimationFrame(step);
   });
@@ -119,50 +119,7 @@
 
   // ---------- 생중계 ----------
   const nameOf = pid => { const p = G_().players[pid]; return p ? Sim.shortName(p.name) : '?'; };
-  App.liveCourt = () => {
-    const lv = App.live; if (!lv || !document.getElementById('lv-viz')) return;
-    const G = G_(), game = lv.game;
-    const teams = [G.teams[lv.g.h], G.teams[lv.g.a]];
-    const colors = vizColors(teams);
-    const filter = lv.shotFilter || 'all';
-    const plays = game.plays || [];
-    if (lv.hlSeen === undefined) lv.hlSeen = 0;
-    // 화면을 새로 그렸으면(새 svg) 지금까지의 슛을 한 번에 다시 찍는다
-    const svg = q('lv-viz', 'svg');
-    if (!svg._hm) { svg._hm = true; App.courtShots('lv-viz', HL.compactShots(plays), colors, filter); lv.playIdx = plays.length; }
-    const fresh = plays.slice(lv.playIdx); lv.playIdx = plays.length;
-    // 선수 위치: 공을 가진 팀이 공격
-    const off = game.T[game.poss], def = game.T[1 - game.poss];
-    const mk = t => t.court.map(r => ({ pid: r.p.pid, pos: r.p.pos, nm: r.nm }));
-    const isShot = e => e.t === 'shot' && !e.fouled;
-    const shot = fresh.filter(isShot).pop();
-    const animate = !lv.paused && lv.speed <= 2 && !lv.finished;
-    if (animate && shot) {
-      // 슛을 쏜 팀이 공격인 장면으로 그린다
-      const so = game.T[shot.side], sd = game.T[1 - shot.side];
-      App.courtPlayers('lv-viz', mk(so), mk(sd), colors[shot.side], colors[1 - shot.side]);
-      for (const e of fresh) if (isShot(e) && e !== shot && (filter === 'all' || String(e.side) === filter)) App.courtAddShot('lv-viz', e, colors[e.side]);
-      if (filter === 'all' || String(shot.side) === filter) App.courtShoot('lv-viz', shot, colors[shot.side], lv.speed === 1 ? 800 : 450);
-    } else {
-      App.courtPlayers('lv-viz', mk(off), mk(def), colors[off.side], colors[def.side]);
-      for (const e of fresh) if (isShot(e) && (filter === 'all' || String(e.side) === filter)) App.courtAddShot('lv-viz', e, colors[e.side]);
-    }
-    // 하이라이트
-    const hl = HL.analyze(plays, nameOf, s => teams[s].abbr);
-    lv.hl = hl;
-    if (hl.length > lv.hlSeen) {
-      const nw = hl.slice(lv.hlSeen).filter(h => h.sc >= 3).pop();
-      lv.hlSeen = hl.length;
-      if (nw && !lv.finished) App.courtBanner('lv-viz', `🔥 ${nw.cap}`, colors[nw.def ? 1 - nw.e.side : nw.e.side]);
-    }
-    const list = document.getElementById('lv-hl');
-    if (list) list.innerHTML = hlList(HL.top(hl, 12), teams, 'liveHl');
-    const fs = document.getElementById('lv-shotstat');
-    if (fs) {
-      const st = side => { const s = plays.filter(e => e.t === 'shot' && !e.fouled && e.side === side); const m = s.filter(e => e.made).length; return `${teams[side].abbr} ${m}/${s.length}`; };
-      fs.innerHTML = `<span style="color:${colors[0]}">●</span> ${esc(st(0))} · <span style="color:${colors[1]}">●</span> ${esc(st(1))}`;
-    }
-  };
+  // 생중계 코트 재생은 ui-play.js(App.liveCourt, App.livePlay)
   function hlList(list, teams, act) {
     if (!list.length) return '<div class="small muted">아직 하이라이트가 없습니다.</div>';
     return list.map((h, k) => {
@@ -180,14 +137,15 @@
     if (e.x !== undefined && (e.t === 'shot' || e.t === undefined)) {
       const shooter = e.pid !== undefined ? [{ pid: e.pid, pos: 'PG', nm: nameOf(e.pid) }] : [];
       if (shooter.length) App.courtPlayers(id, shooter, [], colors[e.side], colors[1 - e.side]);
-      await App.courtShoot(id, Object.assign({}, e, { made: e.made !== undefined ? !!e.made : true }), colors[e.side], 800);
+      await App.courtShoot(id, Object.assign({}, e, { made: e.made !== undefined ? !!e.made : true }), colors[e.side], 1100, false); // 다시 보기는 슛 차트에 또 찍지 않는다
     }
   }
-  A.liveHl = el => { const lv = App.live; const G = G_(); const list = HL.top(lv.hl || [], 12); const h = list[+el.dataset.k]; if (h) { App.pauseLive(); App.liveUpdate(); replay('lv-viz', h, [G.teams[lv.g.h], G.teams[lv.g.a]]); } };
+  A.liveHl = el => { const lv = App.live; const G = G_(); const list = HL.top(lv.hl || [], 12); const h = list[+el.dataset.k]; if (h) { App.pauseLive(); App.stopPlay(); App.liveUpdate(); replay('lv-viz', h, [G.teams[lv.g.h], G.teams[lv.g.a]]); } };
   A.liveReel = async () => {
     const lv = App.live; const G = G_(); const list = HL.top(lv.hl || [], 8);
-    App.pauseLive();
+    App.pauseLive(); App.stopPlay(); App.liveUpdate();
     for (const h of list) { await replay('lv-viz', h, [G.teams[lv.g.h], G.teams[lv.g.a]]); await App.sleep(900); }
+    if (App.live) { App.live.reform = true; App.liveUpdate(); }
   };
   A.shotFilter = el => {
     const lv = App.live; lv.shotFilter = el.value;
